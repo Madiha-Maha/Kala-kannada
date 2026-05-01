@@ -1,4 +1,4 @@
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI, Modality, ThinkingLevel } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
@@ -37,6 +37,8 @@ export async function generatePracticeSentence(level: string) {
   }
 }
 
+let globalAudioCtx: AudioContext | null = null;
+
 export async function speakText(text: string) {
   try {
     const response = await ai.models.generateContent({
@@ -56,40 +58,44 @@ export async function speakText(text: string) {
     const base64Audio = part?.inlineData?.data;
 
     if (base64Audio) {
-      const binaryString = window.atob(base64Audio);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
+      if (!globalAudioCtx) {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+          globalAudioCtx = new AudioContextClass();
+        }
       }
 
-      // 16-bit PCM (2 bytes per sample)
-      const pcm16 = new Int16Array(bytes.buffer);
-      const float32 = new Float32Array(pcm16.length);
-      for (let i = 0; i < pcm16.length; i++) {
-        float32[i] = pcm16[i] / 32768.0;
-      }
-
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextClass) {
+      if (!globalAudioCtx) {
         console.error("AudioContext not supported");
         return;
       }
 
-      const audioCtx = new AudioContextClass();
-      
-      if (audioCtx.state === 'suspended') {
-        await audioCtx.resume();
+      const binaryString = window.atob(base64Audio);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
       }
 
-      const buffer = audioCtx.createBuffer(1, float32.length, 24000);
+      const numSamples = Math.floor(len / 2);
+      const float32 = new Float32Array(numSamples);
+      const dataView = new DataView(bytes.buffer);
+
+      for (let i = 0; i < numSamples; i++) {
+        const sample = dataView.getInt16(i * 2, true); 
+        float32[i] = sample / 32768.0;
+      }
+      
+      if (globalAudioCtx.state === 'suspended') {
+        await globalAudioCtx.resume();
+      }
+
+      const buffer = globalAudioCtx.createBuffer(1, float32.length, 24000);
       buffer.getChannelData(0).set(float32);
 
-      const source = audioCtx.createBufferSource();
+      const source = globalAudioCtx.createBufferSource();
       source.buffer = buffer;
-      source.connect(audioCtx.destination);
-      source.onended = () => {
-        audioCtx.close().catch(console.error);
-      };
+      source.connect(globalAudioCtx.destination);
       source.start(0);
     }
   } catch (error) {
@@ -137,7 +143,26 @@ export async function generateStory() {
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: "Create a very short, simple 3-sentence children's story in Kannada. Topic: Nature, Animals, or Friendship. Provide response in JSON: { \"title\": \"\", \"content\": \"(Kannada script)\", \"transliteration\": \"\", \"translation\": \"\" }",
+      contents: `Create an interactive 3-scene mini-story in Kannada for beginners. 
+      Theme: Daily Adventure. 
+      Format as JSON: 
+      { 
+        "title": "Story Title",
+        "scenes": [
+          {
+            "id": "start",
+            "text": "Kannada script text for first scene",
+            "transliteration": "pronunciation",
+            "translation": "English meaning",
+            "imageSearchTerm": "one word for background image",
+            "choices": [
+              { "text": "Action option 1", "next": "scene2_a" },
+              { "text": "Action option 2", "next": "scene2_b" }
+            ]
+          },
+          ... up to 3 scenes plus ending scenes ...
+        ]
+      }`,
       config: {
         responseMimeType: "application/json"
       }
@@ -153,7 +178,8 @@ export async function generateCultureFact() {
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: "Tell me one interesting, lesser-known fact about Karnataka's culture, art, or history. Provide response in JSON: { \"title\": \"\", \"description\": \"\", \"kanTitle\": \"(Kannada name if any)\" }",
+      contents: `Tell me one unique fact about Karnataka's culture. Include a search term for an image.
+      Provide response in JSON: { "title": "Fact Title", "description": "fact details", "kanTitle": "Kannada Title", "imageTerm": "search keyword" }`,
       config: {
         responseMimeType: "application/json"
       }

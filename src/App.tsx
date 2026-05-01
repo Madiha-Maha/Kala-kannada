@@ -102,6 +102,16 @@ import { INITIAL_PROGRESS, LESSONS, STORIES, STORY_CONTENT, CULTURE } from './da
 const CultureView = () => {
   const [items, setItems] = useState<CultureItem[]>(CULTURE);
   const [isLoading, setIsLoading] = useState(false);
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
+
+  const handleAudio = async (text: string) => {
+    setIsAudioLoading(true);
+    try {
+      await speakText(text);
+    } finally {
+      setIsAudioLoading(false);
+    }
+  };
 
   const loadMore = async () => {
     setIsLoading(true);
@@ -111,7 +121,7 @@ const CultureView = () => {
         id: `ai-${Date.now()}`,
         title: fact.title,
         description: fact.description,
-        image: `https://images.unsplash.com/photo-1582510003544-4d00b7f74220?w=800&q=80`, // Placeholder fallback
+        image: `https://images.unsplash.com/photo-1516281730419-ce014607f68b?w=800&q=80&${fact.imageTerm || 'karnataka'}`,
         kannada_fact: fact.kanTitle || fact.title
       };
       setItems(prev => [newItem, ...prev]);
@@ -148,10 +158,16 @@ const CultureView = () => {
               <div className="bg-kannada-gold/5 p-4 rounded-xl border border-kannada-gold/10">
                 <p className="text-kannada-ink font-kannada text-lg mb-2">{item.kannada_fact}</p>
                 <button 
-                  onClick={() => speakText(item.kannada_fact)}
-                  className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-kannada-gold hover:text-kannada-red transition-colors"
+                  onClick={() => handleAudio(item.kannada_fact)}
+                  disabled={isAudioLoading}
+                  className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-kannada-gold hover:text-kannada-red transition-colors disabled:opacity-50"
                 >
-                  <Volume2 className="w-4 h-4" /> Listen
+                  {isAudioLoading ? (
+                    <div className="w-3 h-3 border border-kannada-gold border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Volume2 className="w-4 h-4" />
+                  )}
+                  Listen
                 </button>
               </div>
             </div>
@@ -469,15 +485,36 @@ const LessonView = ({ lessonId, onComplete, onBack, onAddXp }: { lessonId: strin
   const [isFinished, setIsFinished] = useState(false);
   const [aiTip, setAiTip] = useState<string | null>(null);
   const [isTipLoading, setIsTipLoading] = useState(false);
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
 
   useEffect(() => {
     const data = LESSONS[lessonId];
-    if (data) setLesson(data);
+    if (data) {
+      setLesson(data);
+    } else {
+      // Fallback if not in registry (should not happen with injection)
+      setLesson(null);
+    }
   }, [lessonId]);
 
-  if (!lesson) return <div className="flex items-center justify-center h-screen">Loading...</div>;
+  if (!lesson) return (
+    <div className="flex flex-col items-center justify-center h-full gap-4">
+      <div className="w-12 h-12 border-4 border-kannada-gold border-t-transparent rounded-full animate-spin" />
+      <p className="text-stone-400 font-bold">Synchronizing Academy Session...</p>
+      <button onClick={onBack} className="text-kannada-red font-bold mt-4">Go Back</button>
+    </div>
+  );
 
   const currentItem = lesson.items[currentIndex];
+
+  const handleAudio = async (text: string) => {
+    setIsAudioLoading(true);
+    try {
+      await speakText(text);
+    } finally {
+      setIsAudioLoading(false);
+    }
+  };
 
   const getAcademyHelp = async () => {
     setIsTipLoading(true);
@@ -567,10 +604,15 @@ const LessonView = ({ lessonId, onComplete, onBack, onAddXp }: { lessonId: strin
               <p className="text-stone-500 font-medium italic">"{currentItem.t}"</p>
             </div>
             <button 
-              onClick={() => speakText(currentItem.q)}
-              className="w-16 h-16 bg-white border border-stone-200 rounded-full flex items-center justify-center text-kannada-gold hover:bg-stone-50 transition-colors shadow-sm"
+              onClick={() => handleAudio(currentItem.q)}
+              disabled={isAudioLoading}
+              className="w-16 h-16 bg-white border border-stone-200 rounded-full flex items-center justify-center text-kannada-gold hover:bg-stone-50 transition-colors shadow-sm disabled:opacity-50"
             >
-              <Volume2 className="w-8 h-8" />
+              {isAudioLoading ? (
+                <div className="w-6 h-6 border-2 border-kannada-gold border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Volume2 className="w-8 h-8" />
+              )}
             </button>
             <button 
               onClick={getAcademyHelp}
@@ -633,8 +675,11 @@ const LessonView = ({ lessonId, onComplete, onBack, onAddXp }: { lessonId: strin
                       <CheckCircle2 className="w-5 h-5" /> Correct! +10 XP
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 px-6 py-2 bg-red-50 text-red-600 rounded-full font-bold">
-                      <XCircle className="w-5 h-5" /> Try again
+                    <div className="flex flex-col items-center gap-1 px-6 py-3 bg-red-50 text-red-600 rounded-[1.5rem] font-bold">
+                      <div className="flex items-center gap-2">
+                        <XCircle className="w-5 h-5" /> Try again
+                      </div>
+                      <p className="text-xs text-red-400 font-mono">Correct: {currentItem.a}</p>
                     </div>
                   )}
                 </motion.div>
@@ -660,6 +705,7 @@ const LessonView = ({ lessonId, onComplete, onBack, onAddXp }: { lessonId: strin
 const StoryPlayer = ({ storyId, content, onComplete, onBack, isLoading }: { storyId?: string, content?: StoryContent | null, onComplete: () => void, onBack: () => void, isLoading?: boolean }) => {
   const [story, setStory] = useState<StoryContent | null>(null);
   const [currentSceneId, setCurrentSceneId] = useState('start');
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
 
   useEffect(() => {
     if (content) {
@@ -669,6 +715,15 @@ const StoryPlayer = ({ storyId, content, onComplete, onBack, isLoading }: { stor
       if (data) setStory(data);
     }
   }, [storyId, content]);
+
+  const handleAudio = async (text: string) => {
+    setIsAudioLoading(true);
+    try {
+      await speakText(text);
+    } finally {
+      setIsAudioLoading(false);
+    }
+  };
 
   if (isLoading) return (
     <div className="flex flex-col items-center justify-center h-screen gap-6">
@@ -704,10 +759,15 @@ const StoryPlayer = ({ storyId, content, onComplete, onBack, isLoading }: { stor
             <div className="flex gap-4 items-center mb-8">
               <h3 className="text-5xl font-kannada leading-tight text-kannada-ink flex-1">{scene.text}</h3>
               <button 
-                onClick={() => speakText(scene.text)}
-                className="w-16 h-16 bg-kannada-gold/10 rounded-full flex items-center justify-center text-kannada-gold shrink-0 hover:bg-kannada-gold/20 transition-all"
+                onClick={() => handleAudio(scene.text)}
+                disabled={isAudioLoading}
+                className="w-16 h-16 bg-kannada-gold/10 rounded-full flex items-center justify-center text-kannada-gold shrink-0 hover:bg-kannada-gold/20 transition-all disabled:opacity-50"
               >
-                <Volume2 className="w-8 h-8" />
+                {isAudioLoading ? (
+                  <div className="w-6 h-6 border-2 border-kannada-gold border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Volume2 className="w-8 h-8" />
+                )}
               </button>
             </div>
             <div className="flex flex-col gap-2 mb-12">
@@ -792,6 +852,7 @@ export default function App() {
   const [userStats, setUserStats] = useState<UserStats>({ xp: 0, streak: 0, hearts: 5 });
   const [masteryInsight, setMasteryInsight] = useState<{kannada: string, english: string, transliteration: string, explanation: string} | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [showInsightModal, setShowInsightModal] = useState(false);
   const [isAppLoading, setIsAppLoading] = useState(true);
   
@@ -841,17 +902,22 @@ export default function App() {
     setIsAiLoading(true);
     try {
       const lessonData = await generateInfiniteLesson();
+      const levelId = `infinite-${Date.now()}`;
+      
       const newLevel: Level = {
-        level_id: `infinite-${Date.now()}`,
-        title: lessonData.title || "Advanced Mastery",
-        items: lessonData.items || [],
+        level_id: levelId,
         category: 'Mastery',
         status: 'unlocked',
         score: 0
       };
-      // Temporary injection for lesson view - ensure LESSONS can handle it or use local state
-      LESSONS[newLevel.level_id] = { title: newLevel.title, items: newLevel.items };
-      setSelectedLevel(newLevel.level_id);
+      
+      // Inject session data into registry
+      LESSONS[levelId] = { 
+        title: lessonData.title || "Advanced Mastery", 
+        items: lessonData.items || [] 
+      };
+      
+      setSelectedLevel(levelId);
     } catch (e) {
       console.error(e);
     } finally {
@@ -865,6 +931,15 @@ export default function App() {
       localStorage.setItem('kala-kannada-stats', JSON.stringify(newStats));
       return newStats;
     });
+  };
+
+  const handleAudio = async (text: string) => {
+    setIsAudioLoading(true);
+    try {
+      await speakText(text);
+    } finally {
+      setIsAudioLoading(false);
+    }
   };
 
   const openInsightPortal = async () => {
@@ -912,16 +987,14 @@ export default function App() {
     setSelectedStory(null);
     try {
       const storyData = await generateStory();
+      if (!storyData.scenes || storyData.scenes.length === 0) return;
+      
       const formatted: StoryContent = {
         title: storyData.title || "New Narrative",
-        scenes: [{
-          id: 'start',
-          text: storyData.content,
-          transliteration: storyData.transliteration,
-          translation: storyData.translation,
-          image: `https://images.unsplash.com/photo-1544413155-257a44f77259?w=800&q=80`,
-          choices: []
-        }]
+        scenes: storyData.scenes.map((s: any) => ({
+          ...s,
+          image: `https://images.unsplash.com/photo-1544413155-257a44f77259?w=800&q=80&${s.imageSearchTerm || 'karnataka'}`
+        }))
       };
       setAiStory(formatted);
     } catch (error) {
@@ -940,16 +1013,18 @@ export default function App() {
     if (selectedLevel) {
       const newProgress = [...progress];
       const currentIndex = newProgress.findIndex(p => p.level_id === selectedLevel);
-      newProgress[currentIndex].status = 'completed';
       
-      const nextLevel = newProgress[currentIndex + 1];
-      if (nextLevel && nextLevel.status === 'locked') {
-        nextLevel.status = 'unlocked';
+      if (currentIndex !== -1) {
+        newProgress[currentIndex].status = 'completed';
+        const nextLevel = newProgress[currentIndex + 1];
+        if (nextLevel && nextLevel.status === 'locked') {
+          nextLevel.status = 'unlocked';
+        }
+        setProgress(newProgress);
+        localStorage.setItem('kala-kannada-progress', JSON.stringify(newProgress));
       }
       
-      setProgress(newProgress);
-      localStorage.setItem('kala-kannada-progress', JSON.stringify(newProgress));
-      
+      // If it was an infinite session, just clear it
       setView('map');
       setSelectedLevel(null);
     }
@@ -1257,10 +1332,15 @@ export default function App() {
                     <div className="flex items-center justify-center gap-6 mb-8">
                       <h4 className="text-7xl font-kannada text-kannada-ink leading-tight">{masteryInsight.kannada}</h4>
                       <button 
-                        onClick={() => speakText(masteryInsight.kannada)}
-                        className="w-16 h-16 bg-kannada-gold/10 rounded-full flex items-center justify-center text-kannada-gold hover:bg-kannada-gold/20 transition-colors"
+                        onClick={() => handleAudio(masteryInsight.kannada)}
+                        disabled={isAudioLoading}
+                        className="w-16 h-16 bg-kannada-gold/10 rounded-full flex items-center justify-center text-kannada-gold hover:bg-kannada-gold/20 transition-colors disabled:opacity-50"
                       >
-                        <Volume2 className="w-8 h-8" />
+                        {isAudioLoading ? (
+                           <div className="w-6 h-6 border-2 border-kannada-gold border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Volume2 className="w-8 h-8" />
+                        )}
                       </button>
                     </div>
                     <p className="text-2xl text-kannada-gold font-black mb-4">{masteryInsight.transliteration}</p>
