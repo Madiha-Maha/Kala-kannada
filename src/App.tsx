@@ -22,11 +22,16 @@ import {
   Settings,
   Search,
   ChevronLeft,
-  Share2
+  Share2,
+  Library
 } from 'lucide-react';
-import { generatePracticeSentence, speakText } from './services/geminiService';
+import { generatePracticeSentence, speakText, chatWithAi, generateStory, generateCultureFact } from './services/geminiService';
 
 // --- Types ---
+interface Message {
+  role: 'user' | 'model';
+  parts: [{ text: string }];
+}
 interface CultureItem {
   id: string;
   title: string;
@@ -85,10 +90,42 @@ import { INITIAL_PROGRESS, LESSONS, STORIES, STORY_CONTENT, CULTURE } from './da
 // --- Components ---
 
 const CultureView = () => {
+  const [items, setItems] = useState<CultureItem[]>(CULTURE);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const loadMore = async () => {
+    setIsLoading(true);
+    try {
+      const fact = await generateCultureFact();
+      const newItem: CultureItem = {
+        id: `ai-${Date.now()}`,
+        title: fact.title,
+        description: fact.description,
+        image: `https://images.unsplash.com/photo-1582510003544-4d00b7f74220?w=800&q=80`, // Placeholder fallback
+        kannada_fact: fact.kanTitle || fact.title
+      };
+      setItems(prev => [newItem, ...prev]);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <div className="max-w-6xl mx-auto p-8">
+    <div className="max-w-6xl mx-auto p-8 mb-20">
+      <div className="flex justify-center mb-12">
+        <button 
+          onClick={loadMore}
+          disabled={isLoading}
+          className="px-10 py-5 bg-kannada-red text-white rounded-[2rem] font-serif font-black text-xl flex items-center gap-4 hover:scale-105 transition-all disabled:opacity-50 shadow-xl shadow-kannada-red/10"
+        >
+          {isLoading ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Sparkles className="w-6 h-6" />}
+          Discover More Hidden Facts
+        </button>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {CULTURE.map((item) => (
+        {items.map((item) => (
           <motion.div
             key={item.id}
             whileHover={{ y: -10 }}
@@ -111,6 +148,81 @@ const CultureView = () => {
           </motion.div>
         ))}
       </div>
+    </div>
+  );
+};
+
+const ChatView = ({ history, onSendMessage, isLoading }: { history: Message[], onSendMessage: (msg: string) => void, isLoading: boolean }) => {
+  const [input, setInput] = useState('');
+  const chatEndRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [history]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+    onSendMessage(input);
+    setInput('');
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto h-[calc(100vh-14rem)] flex flex-col glass-card bg-white/60">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {history.length === 0 && (
+          <div className="h-full flex flex-col items-center justify-center text-center p-12">
+            <div className="w-20 h-20 bg-kannada-red/10 rounded-[2rem] flex items-center justify-center mb-6">
+              <Sparkles className="w-10 h-10 text-kannada-red" />
+            </div>
+            <h3 className="text-3xl font-serif font-black mb-4 uppercase tracking-widest text-kannada-ink">Chat with Kala</h3>
+            <p className="text-stone-400 max-w-sm font-medium">Ask me anything about Kannada! I can translate, explain grammar, or just chat.</p>
+          </div>
+        )}
+        {history.map((msg, idx) => (
+          <motion.div
+            key={idx}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+          >
+            <div className={`max-w-[80%] p-5 rounded-[2rem] ${
+              msg.role === 'user' 
+                ? 'bg-kannada-ink text-white rounded-tr-none' 
+                : 'bg-white border border-stone-100 text-kannada-ink shadow-sm rounded-tl-none'
+            }`}>
+              <p className="text-lg leading-relaxed">{msg.parts[0].text}</p>
+            </div>
+          </motion.div>
+        ))}
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className="bg-white border border-stone-100 p-5 rounded-[2rem] rounded-tl-none shadow-sm">
+              <div className="flex gap-1">
+                <div className="w-2 h-2 bg-kannada-gold rounded-full animate-bounce" />
+                <div className="w-2 h-2 bg-kannada-gold rounded-full animate-bounce [animation-delay:0.2s]" />
+                <div className="w-2 h-2 bg-kannada-gold rounded-full animate-bounce [animation-delay:0.4s]" />
+              </div>
+            </div>
+          </div>
+        )}
+        <div ref={chatEndRef} />
+      </div>
+      <form onSubmit={handleSubmit} className="p-6 border-t border-stone-100 bg-white/40 flex gap-4">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Type your message..."
+          className="flex-1 px-8 py-5 bg-white border border-stone-100 rounded-[1.5rem] focus:border-kannada-gold outline-none transition-all font-medium text-lg"
+        />
+        <button 
+          disabled={!input.trim() || isLoading}
+          className="w-16 h-16 bg-kannada-red text-white rounded-[1.5rem] flex items-center justify-center shadow-lg shadow-kannada-red/10 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+        >
+          <ChevronRight className="w-8 h-8" />
+        </button>
+      </form>
     </div>
   );
 };
@@ -188,6 +300,8 @@ const LessonView = ({ lessonId, onComplete, onBack, onAddXp }: { lessonId: strin
   const [userInput, setUserInput] = useState('');
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [isFinished, setIsFinished] = useState(false);
+  const [aiTip, setAiTip] = useState<string | null>(null);
+  const [isTipLoading, setIsTipLoading] = useState(false);
 
   useEffect(() => {
     const data = LESSONS[lessonId];
@@ -197,6 +311,18 @@ const LessonView = ({ lessonId, onComplete, onBack, onAddXp }: { lessonId: strin
   if (!lesson) return <div className="flex items-center justify-center h-screen">Loading...</div>;
 
   const currentItem = lesson.items[currentIndex];
+
+  const getAiHelp = async () => {
+    setIsTipLoading(true);
+    try {
+      const tip = await chatWithAi(`Give me a short, friendly tip/hint for translating the Kannada letter/word "${currentItem.q}" (which sounds like "${currentItem.t}"). Keep it very brief.`, []);
+      setAiTip(tip);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsTipLoading(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -279,7 +405,40 @@ const LessonView = ({ lessonId, onComplete, onBack, onAddXp }: { lessonId: strin
             >
               <Volume2 className="w-8 h-8" />
             </button>
+            <button 
+              onClick={getAiHelp}
+              disabled={isTipLoading}
+              className="w-16 h-16 bg-kannada-gold/10 border border-kannada-gold/20 rounded-full flex items-center justify-center text-kannada-gold hover:bg-kannada-gold/20 transition-colors shadow-sm"
+              title="Get AI Tip"
+            >
+              <Sparkles className={`w-8 h-8 ${isTipLoading ? 'animate-spin' : ''}`} />
+            </button>
           </div>
+
+          <AnimatePresence>
+            {aiTip && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="max-w-md mx-auto mb-10 overflow-hidden"
+              >
+                <div className="bg-kannada-cream p-6 rounded-[2rem] border border-kannada-gold/20 relative">
+                  <button onClick={() => setAiTip(null)} className="absolute top-4 right-4 text-stone-300 hover:text-kannada-ink">
+                    <X className="w-4 h-4" />
+                  </button>
+                  <div className="flex gap-4 items-start text-left">
+                    <div className="w-10 h-10 bg-kannada-gold rounded-2xl flex items-center justify-center shrink-0">
+                      <Sparkles className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-kannada-gold mb-1">Kala's Tip</p>
+                      <p className="text-stone-600 font-medium leading-relaxed">{aiTip}</p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <form onSubmit={handleSubmit} className="w-full max-w-md mx-auto relative">
             <input
@@ -331,14 +490,25 @@ const LessonView = ({ lessonId, onComplete, onBack, onAddXp }: { lessonId: strin
   );
 };
 
-const StoryPlayer = ({ storyId, onComplete, onBack }: { storyId: string, onComplete: () => void, onBack: () => void }) => {
+const StoryPlayer = ({ storyId, content, onComplete, onBack, isLoading }: { storyId?: string, content?: StoryContent | null, onComplete: () => void, onBack: () => void, isLoading?: boolean }) => {
   const [story, setStory] = useState<StoryContent | null>(null);
   const [currentSceneId, setCurrentSceneId] = useState('start');
 
   useEffect(() => {
-    const data = STORY_CONTENT[storyId];
-    if (data) setStory(data);
-  }, [storyId]);
+    if (content) {
+      setStory(content);
+    } else if (storyId) {
+      const data = STORY_CONTENT[storyId];
+      if (data) setStory(data);
+    }
+  }, [storyId, content]);
+
+  if (isLoading) return (
+    <div className="flex flex-col items-center justify-center h-screen gap-6">
+      <div className="w-20 h-20 border-4 border-kannada-red border-t-transparent rounded-full animate-spin" />
+      <h3 className="text-2xl font-serif font-black animate-pulse">Kala is composing a new tale...</h3>
+    </div>
+  );
 
   if (!story) return <div className="flex items-center justify-center h-screen">Loading Story...</div>;
 
@@ -364,7 +534,15 @@ const StoryPlayer = ({ storyId, onComplete, onBack }: { storyId: string, onCompl
         >
           <img src={scene.image} alt="Scene" className="w-full h-80 object-cover" referrerPolicy="no-referrer" />
           <div className="p-10">
-            <h3 className="text-5xl font-kannada mb-8 leading-tight text-kannada-ink">{scene.text}</h3>
+            <div className="flex gap-4 items-center mb-8">
+              <h3 className="text-5xl font-kannada leading-tight text-kannada-ink flex-1">{scene.text}</h3>
+              <button 
+                onClick={() => speakText(scene.text)}
+                className="w-16 h-16 bg-kannada-gold/10 rounded-full flex items-center justify-center text-kannada-gold shrink-0 hover:bg-kannada-gold/20 transition-all"
+              >
+                <Volume2 className="w-8 h-8" />
+              </button>
+            </div>
             <div className="flex flex-col gap-2 mb-12">
               <p className="text-xl text-kannada-gold font-bold">{scene.transliteration}</p>
               <p className="text-stone-400 italic text-lg">"{scene.translation}"</p>
@@ -397,9 +575,18 @@ const StoryPlayer = ({ storyId, onComplete, onBack }: { storyId: string, onCompl
   );
 };
 
-const StoryList = ({ onSelectStory }: { onSelectStory: (id: string) => void }) => {
+const StoryList = ({ onSelectStory, onAiStory }: { onSelectStory: (id: string) => void, onAiStory: () => void }) => {
   return (
-    <div className="max-w-5xl mx-auto p-8">
+    <div className="max-w-5xl mx-auto p-8 mb-20">
+      <div className="flex justify-center mb-16">
+        <button 
+          onClick={onAiStory}
+          className="px-12 py-6 bg-kannada-ink text-white rounded-[2.5rem] font-serif font-black text-2xl flex items-center gap-6 hover:scale-105 transition-all shadow-2xl shadow-kannada-ink/20"
+        >
+          <Sparkles className="w-8 h-8 text-kannada-gold" />
+          Tell Me an Infinite Story
+        </button>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {STORIES.map((story) => (
           <motion.div
@@ -431,7 +618,7 @@ const StoryList = ({ onSelectStory }: { onSelectStory: (id: string) => void }) =
 };
 
 export default function App() {
-  const [view, setView] = useState<'map' | 'lesson' | 'stories' | 'story-player' | 'culture'>('map');
+  const [view, setView] = useState<'map' | 'lesson' | 'stories' | 'story-player' | 'culture' | 'chat'>('map');
   const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
   const [selectedStory, setSelectedStory] = useState<string | null>(null);
   const [progress, setProgress] = useState<Level[]>([]);
@@ -440,6 +627,14 @@ export default function App() {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
   const [isAppLoading, setIsAppLoading] = useState(true);
+  
+  // Chat state
+  const [chatHistory, setChatHistory] = useState<Message[]>([]);
+  const [isChatLoading, setIsChatLoading] = useState(false);
+
+  // AI Story state
+  const [aiStory, setAiStory] = useState<StoryContent | null>(null);
+  const [isStoryLoading, setIsStoryLoading] = useState(false);
 
   useEffect(() => {
     // Splash screen effect
@@ -489,6 +684,48 @@ export default function App() {
       console.error("AI Practice Error:", error);
     } finally {
       setIsAiLoading(false);
+    }
+  };
+
+  const handleSendMessage = async (msg: string) => {
+    const userMsg: Message = { role: 'user', parts: [{ text: msg }] };
+    setChatHistory(prev => [...prev, userMsg]);
+    setIsChatLoading(true);
+
+    try {
+      const aiResponse = await chatWithAi(msg, chatHistory);
+      const modelMsg: Message = { role: 'model', parts: [{ text: aiResponse }] };
+      setChatHistory(prev => [...prev, modelMsg]);
+    } catch (error) {
+      console.error("Chat Error:", error);
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
+
+  const handleAiStory = async () => {
+    setView('story-player');
+    setIsStoryLoading(true);
+    setAiStory(null);
+    setSelectedStory(null);
+    try {
+      const storyData = await generateStory();
+      const formatted: StoryContent = {
+        title: storyData.title || "A New Tale",
+        scenes: [{
+          id: 'start',
+          text: storyData.content,
+          transliteration: storyData.transliteration,
+          translation: storyData.translation,
+          image: `https://images.unsplash.com/photo-1544413155-257a44f77259?w=800&q=80`,
+          choices: []
+        }]
+      };
+      setAiStory(formatted);
+    } catch (error) {
+      console.error("AI Story Error:", error);
+    } finally {
+      setIsStoryLoading(false);
     }
   };
 
@@ -578,8 +815,9 @@ export default function App() {
       <div className="lg:hidden fixed bottom-0 left-0 right-0 h-20 bg-white/90 backdrop-blur-xl border-t border-stone-100 z-[100] flex items-center justify-around px-6 pb-safe">
         {[
           { id: 'map', label: 'Path', icon: LayoutGrid },
+          { id: 'chat', label: 'Chat', icon: Sparkles },
           { id: 'stories', label: 'Stories', icon: BookOpen },
-          { id: 'culture', label: 'Culture', icon: Sparkles },
+          { id: 'culture', label: 'Culture', icon: Library },
         ].map(item => (
           <button 
             key={`mobile-${item.id}`}
@@ -611,8 +849,9 @@ export default function App() {
         <nav className="hidden lg:flex items-center gap-10">
           {[
             { id: 'map', label: 'Path', icon: LayoutGrid },
+            { id: 'chat', label: 'Kala Chat', icon: Sparkles },
             { id: 'stories', label: 'Stories', icon: BookOpen },
-            { id: 'culture', label: 'Culture', icon: Sparkles },
+            { id: 'culture', label: 'Culture', icon: Library },
           ].map(item => (
             <button 
               key={item.id}
@@ -694,7 +933,10 @@ export default function App() {
                 <h2 className="text-6xl font-serif font-black mb-4 text-kannada-ink">Katha Sangama</h2>
                 <p className="text-stone-400 text-lg max-w-lg mx-auto font-medium">Immerse yourself in interactive tales and shape your own narrative.</p>
               </div>
-              <StoryList onSelectStory={(id) => { setSelectedStory(id); setView('story-player'); }} />
+              <StoryList 
+                onSelectStory={(id) => { setSelectedStory(id); setAiStory(null); setView('story-player'); }} 
+                onAiStory={handleAiStory}
+              />
             </motion.div>
           ) : view === 'culture' ? (
             <motion.div
@@ -709,6 +951,20 @@ export default function App() {
               </div>
               <CultureView />
             </motion.div>
+          ) : view === 'chat' ? (
+            <motion.div
+              key="chat"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="px-6"
+            >
+              <ChatView 
+                history={chatHistory} 
+                onSendMessage={handleSendMessage} 
+                isLoading={isChatLoading} 
+              />
+            </motion.div>
           ) : (
             <motion.div
               key="story-player"
@@ -717,11 +973,13 @@ export default function App() {
               exit={{ opacity: 0, scale: 0.98 }}
               className="h-[calc(100vh-8rem)]"
             >
-              {selectedStory && (
+              {view === 'story-player' && (
                 <StoryPlayer 
-                  storyId={selectedStory} 
+                  storyId={selectedStory || undefined} 
+                  content={aiStory}
                   onComplete={() => setView('stories')}
                   onBack={() => setView('stories')}
+                  isLoading={isStoryLoading}
                 />
               )}
             </motion.div>

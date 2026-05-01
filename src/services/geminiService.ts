@@ -65,3 +65,38 @@ export async function speakText(text: string) {
     console.error("TTS Error:", error);
   }
 }
+
+export async function chatWithAi(message: string, history: any[]) {
+  const chat = ai.chats.create({
+    model: "gemini-3-flash-preview",
+    config: {
+      systemInstruction: "You are a friendly Kannada language tutor named Kala. Help the user learn Kannada. Speak mostly in English but provide Kannada translations and transliterations for key phrases. Keep responses short, encouraging, and educational. Always provide Kannada script and its English pronunciation (transliteration). If the user asks for a chat, start by greeting them in Kannada.",
+    },
+    history: history,
+  });
+
+  const result = await chat.sendMessage({ message });
+  return result.text || "";
+}
+
+export async function generateStory() {
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: "Create a very short, simple 3-sentence children's story in Kannada. Topic: Nature, Animals, or Friendship. Provide response in JSON: { \"title\": \"\", \"content\": \"(Kannada script)\", \"transliteration\": \"\", \"translation\": \"\" }",
+    config: {
+      responseMimeType: "application/json"
+    }
+  });
+  return JSON.parse(response.text || "{}");
+}
+
+export async function generateCultureFact() {
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: "Tell me one interesting, lesser-known fact about Karnataka's culture, art, or history. Provide response in JSON: { \"title\": \"\", \"description\": \"\", \"kanTitle\": \"(Kannada name if any)\" }",
+    config: {
+      responseMimeType: "application/json"
+    }
+  });
+  return JSON.parse(response.text || "{}");
+}
