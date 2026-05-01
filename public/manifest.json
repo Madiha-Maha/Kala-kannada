@@ -1,0 +1,25 @@
+{
+  "short_name": "KalaKannada",
+  "name": "Kala Kannada: Learn with Art",
+  "icons": [
+    {
+      "src": "https://api.dicebear.com/7.x/initials/png?seed=K&backgroundColor=8B0000&fontFamily=serif&fontSize=60&width=192&height=192",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "https://api.dicebear.com/7.x/initials/png?seed=K&backgroundColor=8B0000&fontFamily=serif&fontSize=60&width=512&height=512",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ],
+  "start_url": ".",
+  "background_color": "#FFFDF5",
+  "display": "standalone",
+  "scope": "/",
+  "orientation": "portrait",
+  "theme_color": "#8B0000",
+  "description": "Immersive Kannada language learning experience."
+}

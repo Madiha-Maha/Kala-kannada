@@ -1,0 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100;200;300;400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500;1,600;1,700;1,800;1,900&family=Noto+Sans+Kannada:wght@100;200;300;400;500;600;700;800;900&family=JetBrains+Mono:wght@100;200;300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", serif;
+  --font-kannada: "Noto Sans Kannada", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --color-kannada-gold: #D4AF37;
+  --color-kannada-red: #8B0000;
+  --color-kannada-cream: #FFFDF5;
+  --color-kannada-ink: #1A1A1A;
+  --color-kannada-leaf: #2D5A27;
+  
+  --shadow-soft: 0 10px 30px -5px rgba(0, 0, 0, 0.05);
+  --shadow-premium: 0 20px 40px -10px rgba(0, 0, 0, 0.1);
+}
+
+body {
+  @apply bg-kannada-cream text-kannada-ink font-sans antialiased selection:bg-kannada-gold/20;
+}
+
+.glass-card {
+  @apply bg-white/90 backdrop-blur-xl border border-stone-100 shadow-[var(--shadow-soft)] rounded-[2.5rem] transition-all duration-300;
+}
+
+.btn-primary {
+  @apply px-8 py-5 bg-kannada-red text-white rounded-[1.5rem] font-bold shadow-[0_10px_20px_-5px_rgba(139,0,0,0.3)] hover:scale-[1.02] hover:shadow-[0_15px_30px_-5px_rgba(139,0,0,0.4)] transition-all active:scale-95 disabled:opacity-50;
+}
+
+.btn-secondary {
+  @apply px-8 py-5 bg-white border-2 border-stone-100 text-kannada-ink rounded-[1.5rem] font-bold hover:bg-stone-50 hover:border-stone-200 transition-all active:scale-95;
+}
+
+.mandala-node {
+  @apply relative flex items-center justify-center w-28 h-28 rounded-[2.5rem] border-4 border-stone-100/50 bg-white shadow-[var(--shadow-soft)] transition-all duration-500 overflow-visible;
+}
+
+.mandala-node.unlocked {
+  @apply border-kannada-gold/40 bg-white shadow-[0_15px_35px_-10px_rgba(212,175,55,0.2)] cursor-pointer hover:scale-110 hover:border-kannada-gold hover:rotate-3;
+}
+
+.mandala-node.completed {
+  @apply bg-kannada-gold border-kannada-gold text-white shadow-[0_15px_30px_-5px_rgba(212,175,55,0.3)];
+}
+
+.mandala-node.locked {
+  @apply opacity-20 grayscale-[0.8] cursor-not-allowed border-stone-100;
+}
+
+.progress-bar-fill {
+  @apply h-full bg-gradient-to-r from-kannada-gold to-yellow-400 rounded-full transition-all duration-700 ease-out;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-stone-200 rounded-full;
+}
+
