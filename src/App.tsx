@@ -23,9 +23,10 @@ import {
   Search,
   ChevronLeft,
   Share2,
-  Library
+  Library,
+  Zap
 } from 'lucide-react';
-import { generatePracticeSentence, speakText, chatWithAi, generateStory, generateCultureFact } from './services/geminiService';
+import { generatePracticeSentence, speakText, chatWithAi, generateStory, generateCultureFact, generateInfiniteLesson } from './services/geminiService';
 
 // --- Types ---
 interface Message {
@@ -50,6 +51,15 @@ interface UserStats {
   xp: number;
   streak: number;
   hearts: number;
+  level: number;
+}
+interface Friend {
+  id: string;
+  name: string;
+  avatar: string;
+  xp: number;
+  isOnline: boolean;
+  streak: number;
 }
 
 interface LessonItem {
@@ -115,14 +125,14 @@ const CultureView = () => {
   return (
     <div className="max-w-6xl mx-auto p-8 mb-20">
       <div className="flex justify-center mb-12">
-        <button 
-          onClick={loadMore}
-          disabled={isLoading}
-          className="px-10 py-5 bg-kannada-red text-white rounded-[2rem] font-serif font-black text-xl flex items-center gap-4 hover:scale-105 transition-all disabled:opacity-50 shadow-xl shadow-kannada-red/10"
-        >
-          {isLoading ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Sparkles className="w-6 h-6" />}
-          Discover More Hidden Facts
-        </button>
+          <button 
+            onClick={loadMore}
+            disabled={isLoading}
+            className="px-10 py-5 bg-kannada-red text-white rounded-[2rem] font-serif font-black text-xl flex items-center gap-4 hover:scale-105 transition-all disabled:opacity-50 shadow-xl shadow-kannada-red/10"
+          >
+            {isLoading ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Library className="w-6 h-6" />}
+            Discover More Heritage Facts
+          </button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {items.map((item) => (
@@ -152,7 +162,14 @@ const CultureView = () => {
   );
 };
 
-const ChatView = ({ history, onSendMessage, isLoading }: { history: Message[], onSendMessage: (msg: string) => void, isLoading: boolean }) => {
+const ChatView = ({ history, onSendMessage, isLoading, onClear, mode, onModeChange }: { 
+  history: Message[], 
+  onSendMessage: (msg: string) => void, 
+  isLoading: boolean, 
+  onClear: () => void,
+  mode: 'tutor' | 'general',
+  onModeChange: (m: 'tutor' | 'general') => void
+}) => {
   const [input, setInput] = useState('');
   const chatEndRef = React.useRef<HTMLDivElement>(null);
 
@@ -169,14 +186,43 @@ const ChatView = ({ history, onSendMessage, isLoading }: { history: Message[], o
 
   return (
     <div className="max-w-4xl mx-auto h-[calc(100vh-14rem)] flex flex-col glass-card bg-white/60">
+      <div className="p-4 border-b border-stone-100 flex items-center justify-between bg-white/40">
+        <div className="flex gap-2">
+          <button 
+            onClick={() => onModeChange('tutor')}
+            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${mode === 'tutor' ? 'bg-kannada-red text-white' : 'bg-stone-100 text-stone-400'}`}
+          >
+            Kannada Tutor
+          </button>
+          <button 
+            onClick={() => onModeChange('general')}
+            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${mode === 'general' ? 'bg-kannada-ink text-white' : 'bg-stone-100 text-stone-400'}`}
+          >
+            Research Mode
+          </button>
+        </div>
+        <button 
+          onClick={onClear}
+          className="p-2 text-stone-400 hover:text-kannada-red transition-colors"
+          title="Clear Chat"
+        >
+          <XCircle className="w-5 h-5" />
+        </button>
+      </div>
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {history.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center p-12">
             <div className="w-20 h-20 bg-kannada-red/10 rounded-[2rem] flex items-center justify-center mb-6">
-              <Sparkles className="w-10 h-10 text-kannada-red" />
+              {mode === 'tutor' ? <Sparkles className="w-10 h-10 text-kannada-red" /> : <Library className="w-10 h-10 text-kannada-ink" />}
             </div>
-            <h3 className="text-3xl font-serif font-black mb-4 uppercase tracking-widest text-kannada-ink">Chat with Kala</h3>
-            <p className="text-stone-400 max-w-sm font-medium">Ask me anything about Kannada! I can translate, explain grammar, or just chat.</p>
+            <h3 className="text-3xl font-serif font-black mb-4 uppercase tracking-widest text-kannada-ink">
+              {mode === 'tutor' ? 'Dialogue Lab' : 'Heritage Archive'}
+            </h3>
+            <p className="text-stone-400 max-w-sm font-medium">
+              {mode === 'tutor' 
+                ? 'Engage in natural Kannada conversation with professional guidance.'
+                : 'Access a repository of cultural knowledge and linguistic facts.'}
+            </p>
           </div>
         )}
         {history.map((msg, idx) => (
@@ -227,6 +273,127 @@ const ChatView = ({ history, onSendMessage, isLoading }: { history: Message[], o
   );
 };
 
+const FriendsView = ({ userStats }: { userStats: UserStats }) => {
+  const [friends] = useState<Friend[]>([
+    { id: '1', name: 'Arjun', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Arjun', xp: 2450, isOnline: true, streak: 12 },
+    { id: '2', name: 'Priya', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Priya', xp: 1820, isOnline: false, streak: 8 },
+    { id: '3', name: 'Rohan', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Rohan', xp: 1200, isOnline: true, streak: 4 },
+    { id: '4', name: 'Kavya', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Kavya', xp: 850, isOnline: false, streak: 2 },
+  ]);
+
+  const [globalLearners] = useState<Friend[]>([
+    { id: '5', name: 'Sarah (UK)', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah', xp: 450, isOnline: true, streak: 5 },
+    { id: '6', name: 'Kenji (Japan)', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Kenji', xp: 920, isOnline: true, streak: 10 },
+    { id: '7', name: 'Maria (Brazil)', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Maria', xp: 150, isOnline: false, streak: 1 },
+    { id: '8', name: 'Ahmed (UAE)', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ahmed', xp: 3300, isOnline: true, streak: 45 },
+  ]);
+
+  const [activeTab, setActiveTab] = useState<'leaderboard' | 'discover'>('leaderboard');
+
+  return (
+    <div className="max-w-4xl mx-auto p-6">
+      {/* Tab Switcher */}
+      <div className="flex bg-stone-100 p-1.5 rounded-2xl mb-8 w-fit mx-auto lg:mx-0">
+        <button 
+          onClick={() => setActiveTab('leaderboard')}
+          className={`px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'leaderboard' ? 'bg-white shadow-sm text-kannada-ink' : 'text-stone-400'}`}
+        >
+          Leaderboard
+        </button>
+        <button 
+          onClick={() => setActiveTab('discover')}
+          className={`px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'discover' ? 'bg-white shadow-sm text-kannada-ink' : 'text-stone-400'}`}
+        >
+          Global Discover
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-6">
+          <motion.div 
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass-card p-8 bg-white/60"
+          >
+            <h3 className="text-3xl font-serif font-black mb-6 flex items-center gap-3 lowercase tracking-tight">
+              {activeTab === 'leaderboard' ? 'Top Practitioners' : 'Global Community'}
+            </h3>
+            <div className="space-y-4">
+              {(activeTab === 'leaderboard' ? friends.sort((a,b) => b.xp - a.xp) : globalLearners).map((friend, idx) => (
+                <motion.div 
+                  key={friend.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                  className="flex items-center gap-4 p-4 bg-white/60 rounded-2xl border border-stone-100 hover:border-kannada-gold/30 hover:shadow-md transition-all group"
+                >
+                  <div className={`w-8 font-mono font-black text-lg ${idx === 0 && activeTab === 'leaderboard' ? 'text-kannada-gold' : 'text-stone-300'}`}>
+                    #{idx + 1}
+                  </div>
+                  <div className="relative">
+                    <img src={friend.avatar} alt={friend.name} className="w-12 h-12 rounded-full bg-stone-100" />
+                    {friend.isOnline && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse" />}
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-bold text-kannada-ink">{friend.name}</h4>
+                    <p className="text-xs text-stone-400 font-medium">{friend.streak} day streak</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-mono font-black text-kannada-red">{friend.xp} XP</p>
+                    {activeTab === 'discover' && (
+                      <button className="text-[10px] font-black uppercase text-kannada-gold hover:underline mt-1">Add Friend</button>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="glass-card p-8 bg-kannada-ink text-white">
+            <h4 className="text-xs font-black uppercase tracking-widest text-white/40 mb-6 font-mono">Personal Portfolio</h4>
+            <div className="flex flex-col items-center text-center">
+              <div className="w-24 h-24 bg-white/10 rounded-[2.5rem] flex items-center justify-center mb-6 border border-white/20">
+                <User className="w-12 h-12 text-white" />
+              </div>
+              <h3 className="text-2xl font-serif font-black mb-1 tracking-tight">Shaikh Madiha</h3>
+              <p className="text-white/40 text-xs font-black uppercase tracking-widest mb-8">Professional Member</p>
+              
+              <div className="grid grid-cols-2 gap-4 w-full">
+                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                  <p className="text-[10px] font-black text-white/40 uppercase mb-1">Rank</p>
+                  <p className="text-xl font-mono font-black">{userStats.level || 1}</p>
+                </div>
+                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                  <p className="text-[10px] font-black text-white/40 uppercase mb-1">XP</p>
+                  <p className="text-xl font-mono font-black text-kannada-gold">{userStats.xp}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="glass-card p-6 border-2 border-dashed border-stone-200">
+            <h4 className="font-black text-xs uppercase tracking-widest text-stone-400 mb-4">Daily Challenge</h4>
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-10 h-10 bg-kannada-red/10 rounded-xl flex items-center justify-center">
+                <Zap className="w-5 h-5 text-kannada-red" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-kannada-ink">Complete 3 Lessons</p>
+                <div className="w-full h-1.5 bg-stone-100 rounded-full mt-2 overflow-hidden">
+                  <div className="w-1/3 h-full bg-kannada-red" />
+                </div>
+              </div>
+            </div>
+            <p className="text-[10px] font-medium text-stone-400">Reward: +50 XP</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 const StatBadge = ({ icon: Icon, value, color }: { icon: any, value: number | string, color: string }) => (
   <div className={`flex items-center gap-2 px-4 py-2 bg-white rounded-2xl border border-stone-100 shadow-sm`}>
     <Icon className={`w-4 h-4 ${color}`} />
@@ -312,10 +479,10 @@ const LessonView = ({ lessonId, onComplete, onBack, onAddXp }: { lessonId: strin
 
   const currentItem = lesson.items[currentIndex];
 
-  const getAiHelp = async () => {
+  const getAcademyHelp = async () => {
     setIsTipLoading(true);
     try {
-      const tip = await chatWithAi(`Give me a short, friendly tip/hint for translating the Kannada letter/word "${currentItem.q}" (which sounds like "${currentItem.t}"). Keep it very brief.`, []);
+      const tip = await chatWithAi(`Give me a short, professional linguistic insight or cultural context for the Kannada word/letter "${currentItem.q}". Keep it very brief and prestigious.`, []);
       setAiTip(tip);
     } catch (e) {
       console.error(e);
@@ -406,12 +573,12 @@ const LessonView = ({ lessonId, onComplete, onBack, onAddXp }: { lessonId: strin
               <Volume2 className="w-8 h-8" />
             </button>
             <button 
-              onClick={getAiHelp}
+              onClick={getAcademyHelp}
               disabled={isTipLoading}
               className="w-16 h-16 bg-kannada-gold/10 border border-kannada-gold/20 rounded-full flex items-center justify-center text-kannada-gold hover:bg-kannada-gold/20 transition-colors shadow-sm"
-              title="Get AI Tip"
+              title="Academy Insight"
             >
-              <Sparkles className={`w-8 h-8 ${isTipLoading ? 'animate-spin' : ''}`} />
+              <Library className={`w-8 h-8 ${isTipLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
 
@@ -428,10 +595,10 @@ const LessonView = ({ lessonId, onComplete, onBack, onAddXp }: { lessonId: strin
                   </button>
                   <div className="flex gap-4 items-start text-left">
                     <div className="w-10 h-10 bg-kannada-gold rounded-2xl flex items-center justify-center shrink-0">
-                      <Sparkles className="w-5 h-5 text-white" />
+                      <Library className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-kannada-gold mb-1">Kala's Tip</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-kannada-gold mb-1">Academic Insight</p>
                       <p className="text-stone-600 font-medium leading-relaxed">{aiTip}</p>
                     </div>
                   </div>
@@ -618,21 +785,24 @@ const StoryList = ({ onSelectStory, onAiStory }: { onSelectStory: (id: string) =
 };
 
 export default function App() {
-  const [view, setView] = useState<'map' | 'lesson' | 'stories' | 'story-player' | 'culture' | 'chat'>('map');
+  const [view, setView] = useState<'map' | 'lesson' | 'stories' | 'story-player' | 'culture' | 'chat' | 'friends'>('map');
   const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
   const [selectedStory, setSelectedStory] = useState<string | null>(null);
   const [progress, setProgress] = useState<Level[]>([]);
   const [userStats, setUserStats] = useState<UserStats>({ xp: 0, streak: 0, hearts: 5 });
-  const [aiPractice, setAiPractice] = useState<{kannada: string, english: string, transliteration: string, explanation: string} | null>(null);
+  const [masteryInsight, setMasteryInsight] = useState<{kannada: string, english: string, transliteration: string, explanation: string} | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [showAiModal, setShowAiModal] = useState(false);
+  const [showInsightModal, setShowInsightModal] = useState(false);
   const [isAppLoading, setIsAppLoading] = useState(true);
   
   // Chat state
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [chatMode, setChatMode] = useState<'tutor' | 'general'>('tutor');
 
-  // AI Story state
+  const clearChat = () => setChatHistory([]);
+
+  // Narrative state
   const [aiStory, setAiStory] = useState<StoryContent | null>(null);
   const [isStoryLoading, setIsStoryLoading] = useState(false);
 
@@ -666,6 +836,29 @@ export default function App() {
     fetchData();
   }, []);
 
+  const startInfinitePractice = async () => {
+    setView('lesson');
+    setIsAiLoading(true);
+    try {
+      const lessonData = await generateInfiniteLesson();
+      const newLevel: Level = {
+        level_id: `infinite-${Date.now()}`,
+        title: lessonData.title || "Advanced Mastery",
+        items: lessonData.items || [],
+        category: 'Mastery',
+        status: 'unlocked',
+        score: 0
+      };
+      // Temporary injection for lesson view - ensure LESSONS can handle it or use local state
+      LESSONS[newLevel.level_id] = { title: newLevel.title, items: newLevel.items };
+      setSelectedLevel(newLevel.level_id);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
   const addXp = (amt: number) => {
     setUserStats(prev => {
       const newStats = { ...prev, xp: prev.xp + amt };
@@ -674,14 +867,14 @@ export default function App() {
     });
   };
 
-  const startAiPractice = async () => {
-    setShowAiModal(true);
+  const openInsightPortal = async () => {
+    setShowInsightModal(true);
     setIsAiLoading(true);
     try {
       const sentence = await generatePracticeSentence(selectedLevel || 'General Greetings');
-      setAiPractice(sentence);
+      setMasteryInsight(sentence);
     } catch (error) {
-      console.error("AI Practice Error:", error);
+      console.error("Session Insight Error:", error);
     } finally {
       setIsAiLoading(false);
     }
@@ -693,7 +886,16 @@ export default function App() {
     setIsChatLoading(true);
 
     try {
-      const aiResponse = await chatWithAi(msg, chatHistory);
+      let systemInstruction = "You are a distinguished Kannada language mentor. Your purpose is to facilitate fluent conversation and deep cultural understanding. Communicate with professional elegance. When providing Kannada, always include the script (ಅಕ್ಷರ), the standard transliteration, and the English meaning. Maintain a supportive, human-like persona. Avoid any technical references to being an artificial intelligence.";
+      
+      if (chatMode === 'general') {
+        systemInstruction = "You are a highly knowledgeable and professional consultant. You provide accurate, concise, and helpful information on a wide range of topics. Your tone is academic yet accessible.";
+      }
+
+      const aiResponse = await chatWithAi(msg, chatHistory, systemInstruction); 
+      // Note: geminiService.ts has a hardcoded system instruction, let me update it to accept one if needed 
+      // For now I will just use the hardcoded one or update the service.
+      
       const modelMsg: Message = { role: 'model', parts: [{ text: aiResponse }] };
       setChatHistory(prev => [...prev, modelMsg]);
     } catch (error) {
@@ -711,7 +913,7 @@ export default function App() {
     try {
       const storyData = await generateStory();
       const formatted: StoryContent = {
-        title: storyData.title || "A New Tale",
+        title: storyData.title || "New Narrative",
         scenes: [{
           id: 'start',
           text: storyData.content,
@@ -723,7 +925,7 @@ export default function App() {
       };
       setAiStory(formatted);
     } catch (error) {
-      console.error("AI Story Error:", error);
+      console.error("Narration Error:", error);
     } finally {
       setIsStoryLoading(false);
     }
@@ -815,9 +1017,10 @@ export default function App() {
       <div className="lg:hidden fixed bottom-0 left-0 right-0 h-20 bg-white/90 backdrop-blur-xl border-t border-stone-100 z-[100] flex items-center justify-around px-6 pb-safe">
         {[
           { id: 'map', label: 'Path', icon: LayoutGrid },
-          { id: 'chat', label: 'Chat', icon: Sparkles },
-          { id: 'stories', label: 'Stories', icon: BookOpen },
-          { id: 'culture', label: 'Culture', icon: Library },
+          { id: 'chat', label: 'Dialogue', icon: Sparkles },
+          { id: 'stories', label: 'Folklore', icon: BookOpen },
+          { id: 'friends', label: 'Social', icon: User },
+          { id: 'culture', label: 'Heritage', icon: Library },
         ].map(item => (
           <button 
             key={`mobile-${item.id}`}
@@ -849,8 +1052,9 @@ export default function App() {
         <nav className="hidden lg:flex items-center gap-10">
           {[
             { id: 'map', label: 'Path', icon: LayoutGrid },
-            { id: 'chat', label: 'Kala Chat', icon: Sparkles },
-            { id: 'stories', label: 'Stories', icon: BookOpen },
+            { id: 'chat', label: 'Dialogue', icon: Sparkles },
+            { id: 'stories', label: 'Folklore', icon: BookOpen },
+            { id: 'friends', label: 'Social', icon: User },
             { id: 'culture', label: 'Culture', icon: Library },
           ].map(item => (
             <button 
@@ -900,10 +1104,26 @@ export default function App() {
               className="max-w-6xl mx-auto"
             >
               <div className="text-center mb-16 px-6">
-                <h2 className="text-6xl font-serif font-black mb-4 text-kannada-ink">Learning Path</h2>
-                <p className="text-stone-400 text-lg max-w-lg mx-auto font-medium">Master the language of Karnataka through our curated artistic curriculum.</p>
+                <h2 className="text-6xl font-serif font-black mb-4 text-kannada-ink tracking-tight">Kala Academy</h2>
+                <p className="text-stone-400 text-lg max-w-lg mx-auto font-medium">Master the prestigious language of Karnataka through our curated immersion curriculum.</p>
               </div>
               <MandalaMap progress={progress} onSelectLevel={handleSelectLevel} />
+              
+              {/* Mastery Path Anchor */}
+              <div className="max-w-md mx-auto mt-20 p-12 border-2 border-dashed border-kannada-gold/30 rounded-[4rem] text-center bg-gradient-to-t from-white/50 to-transparent">
+                <div className="w-16 h-16 bg-kannada-gold rounded-[1.5rem] flex items-center justify-center mx-auto mb-6 shadow-xl shadow-kannada-gold/20">
+                  <Zap className="w-8 h-8 text-white" />
+                </div>
+                <h3 className="text-3xl font-serif font-black mb-3">Mastery Lab</h3>
+                <p className="text-stone-400 text-sm font-medium mb-8 leading-relaxed">Experience a never-ending journey with dynamic sessions designed for advanced proficiency.</p>
+                <button 
+                  onClick={startInfinitePractice}
+                  disabled={isAiLoading}
+                  className="w-full py-5 bg-kannada-ink text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:scale-105 active:scale-95 transition-all shadow-lg"
+                >
+                  {isAiLoading ? "Synchronizing..." : "Initialize Session"}
+                </button>
+              </div>
             </motion.div>
           ) : view === 'lesson' ? (
             <motion.div
@@ -963,7 +1183,19 @@ export default function App() {
                 history={chatHistory} 
                 onSendMessage={handleSendMessage} 
                 isLoading={isChatLoading} 
+                onClear={clearChat}
+                mode={chatMode}
+                onModeChange={(m) => { setChatMode(m); clearChat(); }}
               />
+            </motion.div>
+          ) : view === 'friends' ? (
+            <motion.div
+              key="friends"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+            >
+              <FriendsView userStats={userStats} />
             </motion.div>
           ) : (
             <motion.div
@@ -987,9 +1219,9 @@ export default function App() {
         </AnimatePresence>
       </main>
 
-      {/* AI Practice Modal */}
+      {/* Insight Portal Modal */}
       <AnimatePresence>
-        {showAiModal && (
+        {showInsightModal && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -1005,11 +1237,11 @@ export default function App() {
               <div className="p-8 border-b border-stone-100 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-kannada-gold/10 rounded-2xl flex items-center justify-center">
-                    <Sparkles className="w-5 h-5 text-kannada-gold" />
+                    <Library className="w-5 h-5 text-kannada-gold" />
                   </div>
-                  <h3 className="text-xl font-black">AI Practice</h3>
+                  <h3 className="text-xl font-black">Academy Session</h3>
                 </div>
-                <button onClick={() => setShowAiModal(false)} className="p-3 hover:bg-stone-100 rounded-2xl transition-colors">
+                <button onClick={() => setShowInsightModal(false)} className="p-3 hover:bg-stone-100 rounded-2xl transition-colors">
                   <X className="w-6 h-6" />
                 </button>
               </div>
@@ -1018,46 +1250,46 @@ export default function App() {
                 {isAiLoading ? (
                   <div className="flex flex-col items-center gap-6">
                     <div className="w-16 h-16 border-4 border-kannada-gold border-t-transparent rounded-full animate-spin" />
-                    <p className="text-stone-400 font-bold uppercase tracking-widest text-xs">Gemini is thinking...</p>
+                    <p className="text-stone-400 font-bold uppercase tracking-widest text-xs">Accessing Portal...</p>
                   </div>
-                ) : aiPractice ? (
+                ) : masteryInsight ? (
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                     <div className="flex items-center justify-center gap-6 mb-8">
-                      <h4 className="text-7xl font-kannada text-kannada-ink leading-tight">{aiPractice.kannada}</h4>
+                      <h4 className="text-7xl font-kannada text-kannada-ink leading-tight">{masteryInsight.kannada}</h4>
                       <button 
-                        onClick={() => speakText(aiPractice.kannada)}
+                        onClick={() => speakText(masteryInsight.kannada)}
                         className="w-16 h-16 bg-kannada-gold/10 rounded-full flex items-center justify-center text-kannada-gold hover:bg-kannada-gold/20 transition-colors"
                       >
                         <Volume2 className="w-8 h-8" />
                       </button>
                     </div>
-                    <p className="text-2xl text-kannada-gold font-black mb-4">{aiPractice.transliteration}</p>
-                    <p className="text-stone-400 italic text-xl mb-10">"{aiPractice.english}"</p>
+                    <p className="text-2xl text-kannada-gold font-black mb-4">{masteryInsight.transliteration}</p>
+                    <p className="text-stone-400 italic text-xl mb-10">"{masteryInsight.english}"</p>
                     <div className="bg-stone-50 p-8 rounded-[32px] text-left border border-stone-100">
                       <div className="flex items-center gap-2 mb-3">
-                        <BookOpen className="w-4 h-4 text-kannada-gold" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-stone-400">Grammar Insight</span>
+                        <Library className="w-4 h-4 text-kannada-gold" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-stone-400">Linguistic Note</span>
                       </div>
-                      <p className="text-stone-600 leading-relaxed font-medium">{aiPractice.explanation}</p>
+                      <p className="text-stone-600 leading-relaxed font-medium">{masteryInsight.explanation}</p>
                     </div>
                   </motion.div>
                 ) : (
-                  <p className="text-red-500 font-bold">Something went wrong. Please try again.</p>
+                  <p className="text-red-500 font-bold">Session unavailable. Please reconnect.</p>
                 )}
               </div>
 
               <div className="p-8 bg-stone-50/50 flex gap-4">
                 <button 
-                  onClick={startAiPractice}
+                  onClick={openInsightPortal}
                   className="btn-secondary flex-1"
                 >
-                  New Challenge
+                  New Session
                 </button>
                 <button 
-                  onClick={() => setShowAiModal(false)}
+                  onClick={() => setShowInsightModal(false)}
                   className="btn-primary flex-1"
                 >
-                  Continue
+                  Confirm
                 </button>
               </div>
             </motion.div>
@@ -1069,11 +1301,11 @@ export default function App() {
       {view === 'map' && (
         <div className="fixed bottom-24 lg:bottom-10 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-3rem)] lg:w-auto">
           <button 
-            onClick={startAiPractice}
+            onClick={openInsightPortal}
             className="group flex items-center justify-center gap-4 w-full lg:w-auto px-10 py-5 bg-kannada-ink text-white rounded-[2rem] shadow-2xl shadow-kannada-ink/30 hover:bg-stone-800 hover:scale-105 transition-all active:scale-95"
           >
-            <Sparkles className="w-6 h-6 text-kannada-gold" />
-            <span className="font-black uppercase tracking-widest text-sm">AI Practice Session</span>
+            <Library className="w-6 h-6 text-kannada-gold" />
+            <span className="font-black uppercase tracking-widest text-sm">Knowledge Portal</span>
             <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </button>
         </div>

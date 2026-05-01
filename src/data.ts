@@ -1,14 +1,14 @@
 export const INITIAL_PROGRESS = [
   { level_id: 'vowels-1', category: 'Basics', status: 'unlocked', score: 0 },
-  { level_id: 'vowels-2', category: 'Basics', status: 'locked', score: 0 },
-  { level_id: 'consonants-1', category: 'Basics', status: 'locked', score: 0 },
+  { level_id: 'vowels-2', category: 'Basics', status: 'unlocked', score: 0 },
+  { level_id: 'consonants-1', category: 'Basics', status: 'unlocked', score: 0 },
   { level_id: 'consonants-2', category: 'Basics', status: 'locked', score: 0 },
+  { level_id: 'numbers-1', category: 'Basics', status: 'unlocked', score: 0 },
   { level_id: 'greetings-1', category: 'Conversation', status: 'locked', score: 0 },
   { level_id: 'greetings-2', category: 'Conversation', status: 'locked', score: 0 },
-  { level_id: 'numbers-1', category: 'Basics', status: 'locked', score: 0 },
-  { level_id: 'family-1', category: 'Conversation', status: 'locked', score: 0 },
   { level_id: 'food-1', category: 'Daily Life', status: 'locked', score: 0 },
   { level_id: 'travel-1', category: 'Daily Life', status: 'locked', score: 0 },
+  { level_id: 'family-1', category: 'Conversation', status: 'locked', score: 0 },
   { level_id: 'emotions-1', category: 'Advanced', status: 'locked', score: 0 },
   { level_id: 'business-1', category: 'Advanced', status: 'locked', score: 0 },
 ];
@@ -42,6 +42,26 @@ export const LESSONS: Record<string, any> = {
       { q: 'ಘ', a: 'gha', t: 'As in Ghost' },
     ]
   },
+  'food-1': {
+    title: 'Food & Dining (ಊಟ)',
+    items: [
+      { q: 'ಹಸಿವು', a: 'hasivu', t: 'Hungry' },
+      { q: 'ನೀರು', a: 'neeru', t: 'Water' },
+      { q: 'ಊಟ', a: 'oota', t: 'Meal/Food' },
+      { q: 'ರುಚಿ', a: 'ruchi', t: 'Taste' },
+      { q: 'ತಿನ್ನಿ', a: 'tinni', t: 'Eat (Polite)' },
+    ]
+  },
+  'travel-1': {
+    title: 'Travel Basics (ಪ್ರಯಾಣ)',
+    items: [
+      { q: 'ಎಲ್ಲಿ?', a: 'elli?', t: 'Where?' },
+      { q: 'ಹೋಗಿ', a: 'hogi', t: 'Go' },
+      { q: 'ಬನ್ನಿ', a: 'banni', t: 'Come' },
+      { q: 'ಬಸ್ಸು', a: 'bassu', t: 'Bus' },
+      { q: 'ದೂರ', a: 'doora', t: 'Far' },
+    ]
+  },
   'greetings-1': {
     title: 'Basic Greetings',
     items: [
@@ -65,10 +85,55 @@ export const LESSONS: Record<string, any> = {
 
 export const STORIES: any[] = [
   { id: 'market-trip', title: 'A Trip to the Market', level: 'Beginner' },
+  { id: 'morning-ritual', title: 'Morning in Mysuru', level: 'Beginner' },
   { id: 'forest-friend', title: 'The Friendly Elephant', level: 'Intermediate' }
 ];
 
 export const STORY_CONTENT: Record<string, any> = {
+  'morning-ritual': {
+    title: 'Morning in Mysuru (ಮೈಸೂರಿನ ಬೆಳಿಗ್ಗೆ)',
+    scenes: [
+      {
+        id: 'start',
+        text: 'ಮೈಸೂರಿನಲ್ಲಿ ಬೆಳಿಗ್ಗೆ ತುಂಬಾ ಸುಂದರವಾಗಿದೆ.',
+        transliteration: 'Mysurinalli beligge tumba sundaravaagide.',
+        translation: 'Morning in Mysuru is very beautiful.',
+        image: 'https://images.unsplash.com/photo-1582510003544-4d00b7f74220?w=800&q=80',
+        choices: [
+          { text: 'ಕಾಫಿ ಕುಡಿಯೋಣ (Let\'s drink coffee)', next: 'coffee' },
+          { text: 'ನಡೆಯೋಣ (Let\'s walk)', next: 'walk' }
+        ]
+      },
+      {
+        id: 'coffee',
+        text: 'ಬಿಸಿ ಬಿಸಿ ಕಾಫಿ ಮಜಾ ನೀಡುತ್ತದೆ.',
+        transliteration: 'Bisi bisi coffee maja needuttade.',
+        translation: 'Hot coffee gives joy.',
+        image: 'https://images.unsplash.com/photo-1541167760496-1628856ab772?w=800&q=80',
+        choices: [
+          { text: 'ಮುಂದೆ ಹೋಗೋಣ (Let\'s go forward)', next: 'end' }
+        ]
+      },
+      {
+        id: 'walk',
+        text: 'ಗಾಳಿ ತುಂಬಾ ತಂಪಾಗಿದೆ.',
+        transliteration: 'Gaali tumba tampaagide.',
+        translation: 'The air is very cool.',
+        image: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&q=80',
+        choices: [
+          { text: 'ಶುಭ ದಿನ (Good day)', next: 'end' }
+        ]
+      },
+      {
+        id: 'end',
+        text: 'ದಿನವು ಅದ್ಭುತವಾಗಿರಲಿ!',
+        transliteration: 'Dinavu adbhutavaagirali!',
+        translation: 'May the day be wonderful!',
+        image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=800&q=80',
+        choices: []
+      }
+    ]
+  },
   'market-trip': {
     title: 'A Trip to the Market (ಮಾರುಕಟ್ಟೆಗೆ ಪ್ರಯಾಣ)',
     scenes: [
