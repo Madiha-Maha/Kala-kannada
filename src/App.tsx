@@ -117,12 +117,13 @@ const CultureView = () => {
     setIsLoading(true);
     try {
       const fact = await generateCultureFact();
+      if (!fact) return;
       const newItem: CultureItem = {
         id: `ai-${Date.now()}`,
-        title: fact.title,
-        description: fact.description,
+        title: fact.title || "Cultural Insight",
+        description: fact.description || "A deep dives into the traditions of Karnataka.",
         image: `https://images.unsplash.com/photo-1516281730419-ce014607f68b?w=800&q=80&${fact.imageTerm || 'karnataka'}`,
-        kannada_fact: fact.kanTitle || fact.title
+        kannada_fact: fact.kanTitle || fact.title || "ಕರ್ನಾಟಕ ಸಂಸ್ಕೃತಿ"
       };
       setItems(prev => [newItem, ...prev]);
     } catch (e) {
@@ -957,7 +958,8 @@ export default function App() {
 
   const handleSendMessage = async (msg: string) => {
     const userMsg: Message = { role: 'user', parts: [{ text: msg }] };
-    setChatHistory(prev => [...prev, userMsg]);
+    const updatedHistory = [...chatHistory, userMsg];
+    setChatHistory(updatedHistory);
     setIsChatLoading(true);
 
     try {
@@ -967,14 +969,14 @@ export default function App() {
         systemInstruction = "You are a highly knowledgeable and professional consultant. You provide accurate, concise, and helpful information on a wide range of topics. Your tone is academic yet accessible.";
       }
 
-      const aiResponse = await chatWithAi(msg, chatHistory, systemInstruction); 
-      // Note: geminiService.ts has a hardcoded system instruction, let me update it to accept one if needed 
-      // For now I will just use the hardcoded one or update the service.
+      const aiResponse = await chatWithAi(msg, updatedHistory, systemInstruction); 
       
       const modelMsg: Message = { role: 'model', parts: [{ text: aiResponse }] };
       setChatHistory(prev => [...prev, modelMsg]);
     } catch (error) {
       console.error("Chat Error:", error);
+      const errorMsg: Message = { role: 'model', parts: [{ text: "Connection was interrupted. Please try again." }] };
+      setChatHistory(prev => [...prev, errorMsg]);
     } finally {
       setIsChatLoading(false);
     }
@@ -987,7 +989,10 @@ export default function App() {
     setSelectedStory(null);
     try {
       const storyData = await generateStory();
-      if (!storyData.scenes || storyData.scenes.length === 0) return;
+      if (!storyData || !storyData.scenes || storyData.scenes.length === 0) {
+        setIsStoryLoading(false);
+        return;
+      }
       
       const formatted: StoryContent = {
         title: storyData.title || "New Narrative",

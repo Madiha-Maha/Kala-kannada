@@ -4,12 +4,14 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 function parseJson(text: string) {
   try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    const jsonString = jsonMatch ? jsonMatch[0] : text;
+    // Handle Markdown code blocks if present
+    const cleanText = text.replace(/```json\n?|```/g, '').trim();
+    const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+    const jsonString = jsonMatch ? jsonMatch[0] : cleanText;
     return JSON.parse(jsonString);
   } catch (e) {
     console.error("JSON Parse Error:", e, "Original text:", text);
-    return {};
+    return null;
   }
 }
 
@@ -18,11 +20,11 @@ export async function generatePracticeSentence(level: string) {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Generate a simple practice sentence in Kannada for a beginner learning the topic: ${level}. 
-      Provide the response in JSON format with the following structure:
+      Return ONLY a JSON object with this exact structure:
       {
-        "kannada": "sentence in Kannada script",
-        "transliteration": "pronunciation in English",
-        "english": "English translation",
+        "kannada": "Kannada script",
+        "transliteration": "pronunciation",
+        "english": "English meaning",
         "explanation": "brief grammatical tip"
       }`,
       config: {
@@ -30,10 +32,20 @@ export async function generatePracticeSentence(level: string) {
       }
     });
 
-    return parseJson(response.text || "{}");
+    return parseJson(response.text || "{}") || {
+      kannada: "ನಮಸ್ಕಾರ",
+      transliteration: "Namaskara",
+      english: "Hello",
+      explanation: "A traditional greeting."
+    };
   } catch (error) {
     console.error("Generate Practice Sentence Error:", error);
-    return {};
+    return {
+      kannada: "ನಮಸ್ಕಾರ",
+      transliteration: "Namaskara",
+      english: "Hello",
+      explanation: "A traditional greeting."
+    };
   }
 }
 
@@ -105,16 +117,22 @@ export async function speakText(text: string) {
 
 export async function chatWithAi(message: string, history: any[], systemInstruction?: string) {
   try {
+    // Filter history to ensure it strictly follows the role/parts structure
+    const validHistory = history.map(h => ({
+      role: h.role,
+      parts: Array.isArray(h.parts) ? h.parts : [{ text: String(h.parts) }]
+    }));
+
     const chat = ai.chats.create({
       model: "gemini-3-flash-preview",
       config: {
         systemInstruction: systemInstruction || "You are a distinguished Kannada language mentor. Your purpose is to facilitate fluent conversation and deep cultural understanding. Communicate with professional elegance. When providing Kannada, always include the script (ಅಕ್ಷರ), the standard transliteration, and the English meaning. Maintain a supportive, human-like persona. Avoid any technical references to being an artificial intelligence.",
       },
-      history: history,
+      history: validHistory,
     });
 
     const result = await chat.sendMessage({ message });
-    return result.text || "I apologize, but I could not process your request at this moment. Could you please try again?";
+    return result.text || "I apologize, but I could not process your request at this moment.";
   } catch (error) {
     console.error("Dialogue Error:", error);
     return "I seem to be experiencing a brief delay in communication. Please attempt your response once more.";
@@ -127,12 +145,22 @@ export async function generateInfiniteLesson() {
       model: "gemini-3-flash-preview",
       contents: `Create a unique, advanced-level Kannada practice session. 
       Generate 5 challenging items (phrases or words) about complex real-world situations (e.g., banking, law, poetry, or deep philosophy).
-      Format as JSON: { "title": "Mastery Session", "items": [ { "q": "Kannada script", "a": "transliteration", "t": "meaning" } ] }`,
+      Return ONLY a JSON object with this exact structure: 
+      { 
+        "title": "Mastery Session Name", 
+        "items": [ 
+          { 
+            "q": "Kannada script", 
+            "a": "English transliteration answer", 
+            "t": "English meaning/hint" 
+          } 
+        ] 
+      }`,
       config: {
         responseMimeType: "application/json"
       }
     });
-    return parseJson(response.text || "{}");
+    return parseJson(response.text || "{}") || { title: "Mastery Lab", items: [] };
   } catch (error) {
     console.error("Infinite Lesson Error:", error);
     return { title: "Mastery Lab", items: [] };
@@ -144,33 +172,78 @@ export async function generateStory() {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Create an interactive 3-scene mini-story in Kannada for beginners. 
-      Theme: Daily Adventure. 
-      Format as JSON: 
+      Theme: Daily Adventure in Karnataka. 
+      Return ONLY a JSON object with this exact structure: 
       { 
         "title": "Story Title",
         "scenes": [
           {
             "id": "start",
-            "text": "Kannada script text for first scene",
+            "text": "Kannada script text",
             "transliteration": "pronunciation",
             "translation": "English meaning",
-            "imageSearchTerm": "one word for background image",
+            "imageSearchTerm": "architectural or nature keyword in English for image",
             "choices": [
-              { "text": "Action option 1", "next": "scene2_a" },
-              { "text": "Action option 2", "next": "scene2_b" }
+              { "text": "Action option 1 in English", "next": "scene2_a" },
+              { "text": "Action option 2 in English", "next": "scene2_b" }
             ]
           },
-          ... up to 3 scenes plus ending scenes ...
+          {
+            "id": "scene2_a",
+            "text": "Kannada script text",
+            "transliteration": "pronunciation",
+            "translation": "English meaning",
+            "imageSearchTerm": "keyword",
+            "choices": [{ "text": "Continue", "next": "end" }]
+          },
+          {
+            "id": "scene2_b",
+            "text": "Kannada script text",
+            "transliteration": "pronunciation",
+            "translation": "English meaning",
+            "imageSearchTerm": "keyword",
+            "choices": [{ "text": "Continue", "next": "end" }]
+          },
+          {
+            "id": "end",
+            "text": "The adventure ends here.",
+            "transliteration": "Kathe mugiyitu",
+            "translation": "The story ended",
+            "imageSearchTerm": "sunset",
+            "choices": []
+          }
         ]
       }`,
       config: {
         responseMimeType: "application/json"
       }
     });
-    return parseJson(response.text || "{}");
+    const parsed = parseJson(response.text || "{}");
+    if (parsed && parsed.scenes && parsed.scenes.length > 0) return parsed;
+    throw new Error("Invalid story structure");
   } catch (error) {
     console.error("Generate Story Error:", error);
-    return {};
+    return {
+      title: "An Ancient Tale",
+      scenes: [
+        {
+          id: "start",
+          text: "ಒಂದಾನೊಂದು ಕಾಲದಲ್ಲಿ...",
+          transliteration: "Ondaanondu kaaladalli...",
+          translation: "Once upon a time...",
+          imageSearchTerm: "palace",
+          choices: [{ text: "Listen more", next: "end" }]
+        },
+        {
+          id: "end",
+          text: "ಕಥೆ ಇಲ್ಲಿಗೆ ಮುಕ್ತಾಯವಾಯಿತು.",
+          transliteration: "Kathe illige muktaayavaayitu.",
+          translation: "The story concluded here.",
+          imageSearchTerm: "celebration",
+          choices: []
+        }
+      ]
+    };
   }
 }
 
@@ -178,16 +251,32 @@ export async function generateCultureFact() {
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Tell me one unique fact about Karnataka's culture. Include a search term for an image.
-      Provide response in JSON: { "title": "Fact Title", "description": "fact details", "kanTitle": "Kannada Title", "imageTerm": "search keyword" }`,
+      contents: `Tell me one unique and prestigious fact about Karnataka's culture, art, or history. 
+      Return ONLY a JSON object with this exact structure: 
+      { 
+        "title": "Fact Title", 
+        "description": "Short explanation in English (max 2 sentences)", 
+        "kanTitle": "Title in Kannada script", 
+        "imageTerm": "specific location or object keyword in English" 
+      }`,
       config: {
         responseMimeType: "application/json"
       }
     });
-    return parseJson(response.text || "{}");
+    return parseJson(response.text || "{}") || {
+      title: "Land of Gold",
+      description: "Karnataka is known for its rich sandalwood and gold mines of Kolar.",
+      kanTitle: "ಚಿನ್ನದ ನಾಡು",
+      imageTerm: "temple"
+    };
   } catch (error) {
     console.error("Generate Culture Fact Error:", error);
-    return {};
+    return {
+      title: "Land of Gold",
+      description: "Karnataka is known for its rich sandalwood and gold mines of Kolar.",
+      kanTitle: "ಚಿನ್ನದ ನಾಡು",
+      imageTerm: "temple"
+    };
   }
 }
 
