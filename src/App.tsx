@@ -3,1426 +3,1634 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
+  Search, 
+  Plus, 
+  User,
+  Bell, 
+  Menu, 
+  Hash, 
   BookOpen, 
-  Trophy, 
-  User, 
+  GitPullRequest, 
+  CheckCircle2, 
+  Play, 
+  Shield, 
+  BarChart3, 
+  Settings, 
   ChevronRight, 
-  Sparkles, 
-  ArrowLeft,
-  CheckCircle2,
-  XCircle,
-  Volume2,
+  ChevronDown, 
+  FileText, 
+  Folder, 
+  Star, 
+  GitFork, 
+  Eye,
+  Info,
+  Clock,
+  ArrowUpRight,
+  Filter,
+  MoreHorizontal,
+  Layout,
+  Code2,
+  ListTodo,
+  Workflow,
+  Globe,
+  Database,
+  Cpu,
+  Lock,
+  MessageSquare,
+  Zap,
   X,
-  Flame,
-  Heart,
-  LayoutGrid,
-  Settings,
-  Search,
-  ChevronLeft,
-  Share2,
-  Library,
-  Zap
+  Trash2,
+  Users,
+  Heart
 } from 'lucide-react';
-import { generatePracticeSentence, speakText, chatWithAi, generateStory, generateCultureFact, generateInfiniteLesson } from './services/geminiService';
 
 // --- Types ---
-interface Message {
-  role: 'user' | 'model';
-  parts: [{ text: string }];
-}
-interface CultureItem {
-  id: string;
-  title: string;
-  description: string;
-  image: string;
-  kannada_fact: string;
-}
-interface Level {
-  level_id: string;
-  category: string;
-  status: 'locked' | 'unlocked' | 'completed';
-  score: number;
-}
 
-interface UserStats {
-  xp: number;
-  streak: number;
-  hearts: number;
-  level: number;
-}
-interface Friend {
+type RepoVisibility = 'Public' | 'Private';
+
+interface Repository {
   id: string;
   name: string;
+  owner: string;
+  description: string;
+  stars: number;
+  forks: number;
+  visibility: RepoVisibility;
+  language: string;
+  languageColor: string;
+  updatedAt: string;
+  size: string;
+  likes: number;
+  comments: number;
+  commentList?: { user: string, text: string, time: string }[];
+}
+
+interface UserProfile {
+  id: string;
+  username: string;
   avatar: string;
-  xp: number;
-  isOnline: boolean;
-  streak: number;
+  bio: string;
+  followers: number;
+  following: number;
+  isFriend: boolean;
 }
 
-interface LessonItem {
-  q: string;
-  a: string;
-  t: string;
-}
-
-interface Lesson {
-  title: string;
-  items: LessonItem[];
-}
-
-interface Story {
+interface ForgeNotification {
   id: string;
-  title: string;
-  level: string;
+  type: 'like' | 'comment' | 'follow' | 'push';
+  user: string;
+  target: string;
+  time: string;
+  read: boolean;
 }
 
-interface StoryScene {
+interface SocialActivity {
   id: string;
-  text: string;
-  transliteration: string;
-  translation: string;
-  image: string;
-  choices: { text: string; next: string }[];
+  user: string;
+  action: string;
+  target: string;
+  time: string;
+  likes: number;
+  hasLiked: boolean;
+  comments: { user: string, text: string }[];
 }
 
-interface StoryContent {
+interface FileNode {
+  name: string;
+  type: 'file' | 'folder';
+  children?: FileNode[];
+  content?: string;
+  size?: string;
+}
+
+interface Issue {
+  id: number;
   title: string;
-  scenes: StoryScene[];
+  status: 'open' | 'closed';
+  label: string;
+  author: string;
+  createdAt: string;
+  comments: number;
 }
 
-// --- Components ---
+interface ContributionDay {
+  date: string;
+  level: 0 | 1 | 2 | 3 | 4;
+}
 
-import { INITIAL_PROGRESS, LESSONS, STORIES, STORY_CONTENT, CULTURE } from './data';
+interface PullRequest {
+  id: number;
+  title: string;
+  status: 'open' | 'closed' | 'merged';
+  author: string;
+  createdAt: string;
+  branch: string;
+}
 
-// --- Components ---
+interface WorkflowRun {
+  id: string;
+  name: string;
+  status: 'success' | 'in_progress' | 'failure';
+  conclusion: string;
+  event: string;
+  branch: string;
+  createdAt: string;
+}
 
-const LoadingOverlay = ({ message }: { message: string }) => (
-  <motion.div 
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    exit={{ opacity: 0 }}
-    className="fixed inset-0 z-[100] bg-white/90 backdrop-blur-md flex flex-col items-center justify-center gap-6"
-  >
-    <div className="relative">
-      <div className="w-24 h-24 border-2 border-stone-100 rounded-full" />
-      <motion.div 
-        animate={{ rotate: 360 }}
-        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-        className="absolute inset-0 w-24 h-24 border-t-2 border-kannada-red rounded-full"
-      />
-      <div className="absolute inset-0 flex items-center justify-center">
-        <Sparkles className="w-8 h-8 text-kannada-gold animate-pulse" />
-      </div>
-    </div>
-    <div className="text-center">
-      <h3 className="text-xl font-serif font-black text-kannada-ink tracking-widest uppercase mb-2">Refining Academy</h3>
-      <p className="text-stone-400 font-medium animate-pulse">{message}</p>
-    </div>
-  </motion.div>
-);
+// --- Mock Data ---
 
-const CultureView = () => {
-  const [items, setItems] = useState<CultureItem[]>(CULTURE);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isAudioLoading, setIsAudioLoading] = useState(false);
+const MOCK_PULLS: PullRequest[] = [
+  { id: 456, title: 'Feat: Add multi-threaded support for solver', status: 'open', author: 'alix-dev', createdAt: '1 day ago', branch: 'feat/multithread' },
+  { id: 454, title: 'Fix: Corrected bounding box intersections', status: 'merged', author: 'sarah-code', createdAt: '3 days ago', branch: 'fix/bbox' },
+];
 
-  const handleAudio = async (text: string) => {
-    setIsAudioLoading(true);
-    try {
-      await speakText(text);
-    } finally {
-      setIsAudioLoading(false);
-    }
-  };
+const MOCK_WORKFLOWS: WorkflowRun[] = [
+  { id: 'wf1', name: 'Rust CI / build', status: 'success', conclusion: 'success', event: 'push', branch: 'main', createdAt: '2 hours ago' },
+  { id: 'wf2', name: 'Lint & Audit', status: 'success', conclusion: 'success', event: 'push', branch: 'main', createdAt: '2 hours ago' },
+  { id: 'wf3', name: 'Rust CI / test', status: 'failure', conclusion: 'failure', event: 'pull_request', branch: 'feat/multithread', createdAt: '1 day ago' },
+];
 
-  const loadMore = async () => {
-    if (isLoading) return;
-    setIsLoading(true);
-    try {
-      const fact = await generateCultureFact();
-      if (!fact || !fact.title) {
-        throw new Error("Invalid fact data");
+const MOCK_REPOS: Repository[] = [
+  {
+    id: '1',
+    name: 'nebula-engine',
+    owner: 'alix-dev',
+    description: 'A high-performance WASM-based physics engine for the spatial web.',
+    stars: 12400,
+    forks: 890,
+    visibility: 'Public',
+    language: 'Rust',
+    languageColor: 'bg-orange-500',
+    updatedAt: '2 hours ago',
+    size: '24.5 MB',
+    likes: 156,
+    comments: 24,
+    commentList: [
+      { user: 'sarah-code', text: 'This physics optimization is insane!', time: '2h ago' },
+      { user: 'mike-writes', text: 'Need better docs on the spatial hashing part.', time: '1d ago' }
+    ]
+  },
+  {
+    id: '2',
+    name: 'quantum-ui',
+    owner: 'sarah-code',
+    description: 'Design system primitives for building reactive, glassmorphic interfaces.',
+    stars: 8200,
+    forks: 430,
+    visibility: 'Public',
+    language: 'TypeScript',
+    languageColor: 'bg-blue-500',
+    updatedAt: '5 hours ago',
+    size: '1.2 MB',
+    likes: 89,
+    comments: 12,
+    commentList: [
+      { user: 'alix-dev', text: 'The glassmorphic blur works so well on mobile.', time: '5h ago' }
+    ]
+  },
+  {
+    id: '3',
+    name: 'sentinel-auth',
+    owner: 'mike-writes',
+    description: 'Zero-trust authentication middleware for distributed systems.',
+    stars: 3400,
+    forks: 120,
+    visibility: 'Private',
+    language: 'Go',
+    languageColor: 'bg-cyan-400',
+    updatedAt: '1 day ago',
+    size: '8.4 MB',
+    likes: 45,
+    comments: 8,
+    commentList: []
+  }
+];
+
+const MOCK_USERS: UserProfile[] = [
+  { id: 'u1', username: 'alix-dev', avatar: 'https://i.pravatar.cc/150?u=alix', bio: 'Low-level systems architect. Rust & Go.', followers: 2400, following: 430, isFriend: true },
+  { id: 'u2', username: 'sarah-code', avatar: 'https://i.pravatar.cc/150?u=sarah', bio: 'Performance engineer at SpatialLabs.', followers: 1800, following: 120, isFriend: true },
+  { id: 'u3', username: 'mike-writes', avatar: 'https://i.pravatar.cc/150?u=mike', bio: 'Documentation is my code.', followers: 900, following: 800, isFriend: false }
+];
+
+const MOCK_NOTIFICATIONS: ForgeNotification[] = [
+  { id: 'n1', type: 'like', user: 'alix-dev', target: 'nebula-engine', time: '12m ago', read: false },
+  { id: 'n2', type: 'push', user: 'sarah-code', target: 'quantum-ui', time: '2h ago', read: false },
+  { id: 'n3', type: 'follow', user: 'mike-writes', target: 'you', time: '5h ago', read: true }
+];
+
+const MOCK_FILES: FileNode[] = [
+  {
+    name: 'src',
+    type: 'folder',
+    children: [
+      { name: 'main.rs', type: 'file', content: 'fn main() {\n  println!("Hello Forge!");\n}', size: '1.2 KB' },
+      { name: 'lib.rs', type: 'file', content: 'pub mod core;\npub mod types;', size: '4.5 KB' },
+      { 
+        name: 'core', 
+        type: 'folder', 
+        children: [
+          { name: 'engine.rs', type: 'file', content: '// Core physics logic\nstruct Engine {\n  gravity: f32\n}', size: '12.8 KB' }
+        ] 
       }
-      const newItem: CultureItem = {
-        id: `ai-${Date.now()}`,
-        title: fact.title,
-        description: fact.description,
-        image: `https://images.unsplash.com/photo-1516281730419-ce014607f68b?w=800&q=80&${fact.imageTerm || 'karnataka'}`,
-        kannada_fact: fact.kanTitle || fact.title
-      };
-      setItems(prev => [newItem, ...prev]);
-    } catch (e) {
-      console.error("Discovery Error:", e);
-      // Fallback local discovery if AI fails to ensure "blank" never happens
-      const fallbacks = [
-        { title: "Mysuru Palace", desc: "One of the most visited monuments in India.", kan: "ಮೈಸೂರು ಅರಮನೆ" },
-        { title: "Nandi Hills", desc: "A famous hill station for breathtaking sunrises.", kan: "ನಂದಿ ಬೆಟ್ಟ" },
-        { title: "Jog Falls", desc: "Second highest plunge waterfall in India.", kan: "ಜೋಗ ಜಲಪಾತ" }
-      ];
-      const random = fallbacks[Math.floor(Math.random() * fallbacks.length)];
-      setItems(prev => [{
-        id: `fb-${Date.now()}`,
-        title: random.title,
-        description: random.desc,
-        image: `https://images.unsplash.com/photo-1582510003544-4d00b7f74220?w=800&q=80`,
-        kannada_fact: random.kan
-      }, ...prev]);
-    } finally {
+    ]
+  },
+  { name: 'Cargo.toml', type: 'file', content: '[package]\nname = "nebula-engine"\nversion = "0.1.0"', size: '400 B' },
+  { name: 'README.md', type: 'file', content: '# Nebula Engine\n\nA physics engine built for high performance.', size: '1.1 KB' },
+  { name: '.gitignore', type: 'file', content: 'target/\nCargo.lock', size: '55 B' }
+];
+
+const MOCK_ISSUES: Issue[] = [
+  { id: 452, title: 'Memory leak in spatial hash calculation', status: 'open', label: 'Bug', author: 'alix-dev', createdAt: '2 days ago', comments: 12 },
+  { id: 450, title: 'Support for Apple Silicon hardware acceleration', status: 'open', label: 'Enhancement', author: 'sarah-code', createdAt: '4 days ago', comments: 34 },
+  { id: 448, title: 'Update documentation for v0.4.2 API changes', status: 'closed', label: 'Docs', author: 'mike-writes', createdAt: '1 week ago', comments: 5 }
+];
+
+// --- Sub-components ---
+
+const contributionData: ContributionDay[] = Array.from({ length: 365 }, (_, i) => ({
+  date: `2024-${Math.floor(i/30)+1}-${(i%30)+1}`,
+  level: Math.floor(Math.random() * 5) as 0|1|2|3|4
+}));
+
+import { analyzeCode, chatWithForgeAI } from './services/geminiService';
+
+// --- Sub-components ---
+
+const ForgeIntelligence = ({ fileName, content, onClose }: { fileName: string, content: string, onClose: () => void }) => {
+  const [analysis, setAnalysis] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const runAnalysis = async () => {
+      setIsLoading(true);
+      const result = await analyzeCode(content, fileName);
+      setAnalysis(result);
       setIsLoading(false);
-    }
-  };
+    };
+    runAnalysis();
+  }, [fileName, content]);
 
   return (
-    <div className="max-w-6xl mx-auto p-8 mb-20">
-      <div className="flex justify-center mb-12">
-          <button 
-            onClick={loadMore}
-            disabled={isLoading}
-            className="px-10 py-5 bg-kannada-red text-white rounded-[2rem] font-serif font-black text-xl flex items-center gap-4 hover:scale-105 transition-all disabled:opacity-50 shadow-xl shadow-kannada-red/10"
-          >
-            {isLoading ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Library className="w-6 h-6" />}
-            Discover More Heritage Facts
-          </button>
+    <motion.div 
+      initial={{ x: '100%' }}
+      animate={{ x: 0 }}
+      exit={{ x: '100%' }}
+      className="fixed top-16 right-0 bottom-0 w-96 bg-stone-900/90 backdrop-blur-2xl border-l border-white/10 z-[200] p-8 flex flex-col shadow-2xl"
+    >
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-3">
+          <Cpu className="w-5 h-5 text-emerald-400 animate-pulse" />
+          <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white font-mono">Neural Audit</h3>
+        </div>
+        <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-lg text-stone-500 hover:text-white transition-colors">
+          <X className="w-5 h-5" />
+        </button>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {items.map((item) => (
-          <motion.div
-            key={item.id}
-            whileHover={{ y: -10 }}
-            className="glass-card overflow-hidden flex flex-col"
-          >
-            <img src={item.image} alt={item.title} className="w-full h-48 object-cover" referrerPolicy="no-referrer" />
-            <div className="p-6 flex-1 flex flex-col">
-              <h3 className="text-2xl font-serif font-black mb-2">{item.title}</h3>
-              <p className="text-stone-500 text-sm mb-4 flex-1">{item.description}</p>
-              <div className="bg-kannada-gold/5 p-4 rounded-xl border border-kannada-gold/10">
-                <p className="text-kannada-ink font-kannada text-lg mb-2">{item.kannada_fact}</p>
-                <button 
-                  onClick={() => handleAudio(item.kannada_fact)}
-                  disabled={isAudioLoading}
-                  className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-kannada-gold hover:text-kannada-red transition-colors disabled:opacity-50"
-                >
-                  {isAudioLoading ? (
-                    <div className="w-3 h-3 border border-kannada-gold border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <Volume2 className="w-4 h-4" />
-                  )}
-                  Listen
-                </button>
+
+      <div className="flex-1 overflow-y-auto pr-2 space-y-8 scrollbar-hide">
+        {isLoading ? (
+          <div className="h-full flex flex-col items-center justify-center text-center gap-4">
+            <div className="w-12 h-12 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-stone-500 font-mono text-[10px] uppercase tracking-widest animate-pulse">Decompressing Logic Grids...</p>
+          </div>
+        ) : analysis ? (
+          <>
+            <section>
+              <div className="flex items-end justify-between mb-2">
+                <span className="text-[10px] font-black font-mono text-stone-500 uppercase tracking-widest">Efficiency Rating</span>
+                <span className="text-3xl font-serif font-black italic text-emerald-400">{analysis.score}%</span>
               </div>
-            </div>
-          </motion.div>
-        ))}
+              <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${analysis.score}%` }}
+                  className="h-full bg-emerald-500" 
+                />
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <h4 className="text-[10px] font-black border-l-2 border-emerald-500 pl-3 uppercase tracking-widest text-white/40 font-mono">Executive Summary</h4>
+              <p className="text-sm text-stone-400 leading-relaxed font-medium italic">"{analysis.summary}"</p>
+            </section>
+
+            <section className="space-y-4">
+              <h4 className="text-[10px] font-black border-l-2 border-indigo-500 pl-3 uppercase tracking-widest text-white/40 font-mono">Linguistic Insights</h4>
+              <div className="space-y-3">
+                {analysis.insights.map((insight: any, i: number) => (
+                  <div key={i} className="p-4 bg-white/5 rounded-xl border border-white/5 group hover:border-white/10 transition-colors">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[9px] font-black uppercase text-indigo-400 font-mono tracking-tighter">{insight.type}</span>
+                    </div>
+                    <h5 className="text-sm font-bold text-white mb-1">{insight.title}</h5>
+                    <p className="text-xs text-stone-500 leading-relaxed">{insight.description}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <h4 className="text-[10px] font-black border-l-2 border-amber-500 pl-3 uppercase tracking-widest text-white/40 font-mono">Refinement Protocol</h4>
+              <ul className="space-y-2">
+                {analysis.recommendations.map((rec: string, i: number) => (
+                  <li key={i} className="flex gap-3 text-xs text-stone-400 font-medium">
+                    <ChevronRight className="w-4 h-4 text-amber-500 shrink-0" />
+                    {rec}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </>
+        ) : (
+          <div className="text-center p-8 text-stone-500 font-mono text-xs">Analysis context corrupted.</div>
+        )}
       </div>
-    </div>
+
+      <div className="mt-8 p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl">
+        <p className="text-[10px] text-emerald-400/80 font-mono uppercase tracking-widest mb-2">Diagnostic Mode</p>
+        <button className="w-full py-2 bg-emerald-500 text-stone-950 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-emerald-400 transition-colors">
+          Commit Refinements
+        </button>
+      </div>
+    </motion.div>
   );
 };
 
-const ChatView = ({ history, onSendMessage, isLoading, onClear, mode, onModeChange }: { 
-  history: Message[], 
-  onSendMessage: (msg: string) => void, 
-  isLoading: boolean, 
-  onClear: () => void,
-  mode: 'tutor' | 'general',
-  onModeChange: (m: 'tutor' | 'general') => void
-}) => {
+const ForgeChat = ({ onClose }: { onClose: () => void }) => {
+  const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const chatEndRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [history]);
+  }, [messages]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
-    onSendMessage(input);
+
+    const userMsg = { role: 'user', parts: [{ text: input }] };
+    setMessages(prev => [...prev, userMsg]);
     setInput('');
+    setIsLoading(true);
+
+    const aiResponse = await chatWithForgeAI(input, [...messages, userMsg]);
+    setMessages(prev => [...prev, { role: 'model', parts: [{ text: aiResponse }] }]);
+    setIsLoading(false);
   };
 
   return (
-    <div className="max-w-4xl mx-auto h-[calc(100vh-14rem)] flex flex-col glass-card bg-white/60">
-      <div className="p-4 border-b border-stone-100 flex items-center justify-between bg-white/40">
-        <div className="flex gap-2">
-          <button 
-            onClick={() => onModeChange('tutor')}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${mode === 'tutor' ? 'bg-kannada-red text-white' : 'bg-stone-100 text-stone-400'}`}
-          >
-            Kannada Tutor
-          </button>
-          <button 
-            onClick={() => onModeChange('general')}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${mode === 'general' ? 'bg-kannada-ink text-white' : 'bg-stone-100 text-stone-400'}`}
-          >
-            Research Mode
-          </button>
+    <div className="h-[70vh] flex flex-col glass-card bg-stone-900/40 border-white/5 overflow-hidden">
+      <div className="p-4 border-b border-white/5 flex items-center justify-between bg-white/5 backdrop-blur-md">
+        <div className="flex items-center gap-3">
+          <MessageSquare className="w-5 h-5 text-emerald-400" />
+          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-white font-mono">Neural Terminal</h3>
         </div>
-        <button 
-          onClick={onClear}
-          className="p-2 text-stone-400 hover:text-kannada-red transition-colors"
-          title="Clear Chat"
-        >
-          <XCircle className="w-5 h-5" />
+        <button onClick={onClose} className="text-stone-500 hover:text-white transition-colors">
+          <X className="w-5 h-5" />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {history.length === 0 && (
-          <div className="h-full flex flex-col items-center justify-center text-center p-12">
-            <div className="w-20 h-20 bg-kannada-red/10 rounded-[2rem] flex items-center justify-center mb-6">
-              {mode === 'tutor' ? <Sparkles className="w-10 h-10 text-kannada-red" /> : <Library className="w-10 h-10 text-kannada-ink" />}
-            </div>
-            <h3 className="text-3xl font-serif font-black mb-4 uppercase tracking-widest text-kannada-ink">
-              {mode === 'tutor' ? 'Dialogue Lab' : 'Heritage Archive'}
-            </h3>
-            <p className="text-stone-400 max-w-sm font-medium">
-              {mode === 'tutor' 
-                ? 'Engage in natural Kannada conversation with professional guidance.'
-                : 'Access a repository of cultural knowledge and linguistic facts.'}
-            </p>
+
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide">
+        {messages.length === 0 && (
+          <div className="h-full flex flex-col items-center justify-center text-center p-12 opacity-40">
+            <Cpu className="w-12 h-12 text-stone-600 mb-4" />
+            <p className="text-xs font-mono uppercase tracking-widest text-stone-500">Awaiting technical queries...</p>
           </div>
         )}
-        {history.map((msg, idx) => (
-          <motion.div
-            key={idx}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div className={`max-w-[80%] p-5 rounded-[2rem] ${
-              msg.role === 'user' 
-                ? 'bg-kannada-ink text-white rounded-tr-none' 
-                : 'bg-white border border-stone-100 text-kannada-ink shadow-sm rounded-tl-none'
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[85%] p-4 rounded-2xl font-medium text-sm leading-relaxed ${
+              msg.role === 'user' ? 'bg-emerald-500 text-stone-950 font-bold' : 'bg-white/5 border border-white/5 text-stone-300'
             }`}>
-              <p className="text-lg leading-relaxed">{msg.parts[0].text}</p>
+              {msg.parts[0].text}
             </div>
-          </motion.div>
+          </div>
         ))}
         {isLoading && (
           <div className="flex justify-start">
-            <div className="bg-white border border-stone-100 p-5 rounded-[2rem] rounded-tl-none shadow-sm">
-              <div className="flex gap-1">
-                <div className="w-2 h-2 bg-kannada-gold rounded-full animate-bounce" />
-                <div className="w-2 h-2 bg-kannada-gold rounded-full animate-bounce [animation-delay:0.2s]" />
-                <div className="w-2 h-2 bg-kannada-gold rounded-full animate-bounce [animation-delay:0.4s]" />
-              </div>
+            <div className="bg-white/5 border border-white/5 p-4 rounded-2xl animate-pulse">
+               <div className="flex gap-1.5">
+                 <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce" />
+                 <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:0.2s]" />
+                 <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:0.4s]" />
+               </div>
             </div>
           </div>
         )}
         <div ref={chatEndRef} />
       </div>
-      <form onSubmit={handleSubmit} className="p-6 border-t border-stone-100 bg-white/40 flex gap-4">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Type your message..."
-          className="flex-1 px-8 py-5 bg-white border border-stone-100 rounded-[1.5rem] focus:border-kannada-gold outline-none transition-all font-medium text-lg"
-        />
-        <button 
-          disabled={!input.trim() || isLoading}
-          className="w-16 h-16 bg-kannada-red text-white rounded-[1.5rem] flex items-center justify-center shadow-lg shadow-kannada-red/10 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
-        >
-          <ChevronRight className="w-8 h-8" />
-        </button>
+
+      <form onSubmit={handleSend} className="p-4 border-t border-white/5 bg-white/5">
+        <div className="relative">
+          <input 
+            type="text" 
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Query Forge Intelligence..."
+            className="w-full bg-stone-950 border border-white/10 rounded-xl py-4 pl-4 pr-12 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500/50 transition-all font-mono"
+          />
+          <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-emerald-500 hover:text-emerald-400 disabled:opacity-30">
+            <Plus className="w-5 h-5 rotate-45" />
+          </button>
+        </div>
       </form>
     </div>
   );
 };
 
-const FriendsView = ({ userStats }: { userStats: UserStats }) => {
-  const [friends] = useState<Friend[]>([
-    { id: '1', name: 'Arjun', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Arjun', xp: 2450, isOnline: true, streak: 12 },
-    { id: '2', name: 'Priya', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Priya', xp: 1820, isOnline: false, streak: 8 },
-    { id: '3', name: 'Rohan', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Rohan', xp: 1200, isOnline: true, streak: 4 },
-    { id: '4', name: 'Kavya', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Kavya', xp: 850, isOnline: false, streak: 2 },
-  ]);
-
-  const [globalLearners] = useState<Friend[]>([
-    { id: '5', name: 'Sarah (UK)', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah', xp: 450, isOnline: true, streak: 5 },
-    { id: '6', name: 'Kenji (Japan)', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Kenji', xp: 920, isOnline: true, streak: 10 },
-    { id: '7', name: 'Maria (Brazil)', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Maria', xp: 150, isOnline: false, streak: 1 },
-    { id: '8', name: 'Ahmed (UAE)', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ahmed', xp: 3300, isOnline: true, streak: 45 },
-  ]);
-
-  const [activeTab, setActiveTab] = useState<'leaderboard' | 'discover'>('leaderboard');
-
-  return (
-    <div className="max-w-4xl mx-auto p-6">
-      {/* Tab Switcher */}
-      <div className="flex bg-stone-100 p-1.5 rounded-2xl mb-8 w-fit mx-auto lg:mx-0">
-        <button 
-          onClick={() => setActiveTab('leaderboard')}
-          className={`px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'leaderboard' ? 'bg-white shadow-sm text-kannada-ink' : 'text-stone-400'}`}
-        >
-          Leaderboard
-        </button>
-        <button 
-          onClick={() => setActiveTab('discover')}
-          className={`px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'discover' ? 'bg-white shadow-sm text-kannada-ink' : 'text-stone-400'}`}
-        >
-          Global Discover
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
-          <motion.div 
-            key={activeTab}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="glass-card p-8 bg-white/60"
-          >
-            <h3 className="text-3xl font-serif font-black mb-6 flex items-center gap-3 lowercase tracking-tight">
-              {activeTab === 'leaderboard' ? 'Top Practitioners' : 'Global Community'}
-            </h3>
-            <div className="space-y-4">
-              {(activeTab === 'leaderboard' ? friends.sort((a,b) => b.xp - a.xp) : globalLearners).map((friend, idx) => (
-                <motion.div 
-                  key={friend.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.05 }}
-                  className="flex items-center gap-4 p-4 bg-white/60 rounded-2xl border border-stone-100 hover:border-kannada-gold/30 hover:shadow-md transition-all group"
-                >
-                  <div className={`w-8 font-mono font-black text-lg ${idx === 0 && activeTab === 'leaderboard' ? 'text-kannada-gold' : 'text-stone-300'}`}>
-                    #{idx + 1}
-                  </div>
-                  <div className="relative">
-                    <img src={friend.avatar} alt={friend.name} className="w-12 h-12 rounded-full bg-stone-100" />
-                    {friend.isOnline && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse" />}
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-bold text-kannada-ink">{friend.name}</h4>
-                    <p className="text-xs text-stone-400 font-medium">{friend.streak} day streak</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-mono font-black text-kannada-red">{friend.xp} XP</p>
-                    {activeTab === 'discover' && (
-                      <button className="text-[10px] font-black uppercase text-kannada-gold hover:underline mt-1">Add Friend</button>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-        </div>
-
-        <div className="space-y-6">
-          <div className="glass-card p-8 bg-kannada-ink text-white">
-            <h4 className="text-xs font-black uppercase tracking-widest text-white/40 mb-6 font-mono">Personal Portfolio</h4>
-            <div className="flex flex-col items-center text-center">
-              <div className="w-24 h-24 bg-white/10 rounded-[2.5rem] flex items-center justify-center mb-6 border border-white/20">
-                <User className="w-12 h-12 text-white" />
-              </div>
-              <h3 className="text-2xl font-serif font-black mb-1 tracking-tight">Shaikh Madiha</h3>
-              <p className="text-white/40 text-xs font-black uppercase tracking-widest mb-8">Professional Member</p>
-              
-              <div className="grid grid-cols-2 gap-4 w-full">
-                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                  <p className="text-[10px] font-black text-white/40 uppercase mb-1">Rank</p>
-                  <p className="text-xl font-mono font-black">{userStats.level || 1}</p>
-                </div>
-                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                  <p className="text-[10px] font-black text-white/40 uppercase mb-1">XP</p>
-                  <p className="text-xl font-mono font-black text-kannada-gold">{userStats.xp}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="glass-card p-6 border-2 border-dashed border-stone-200">
-            <h4 className="font-black text-xs uppercase tracking-widest text-stone-400 mb-4">Daily Challenge</h4>
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-10 h-10 bg-kannada-red/10 rounded-xl flex items-center justify-center">
-                <Zap className="w-5 h-5 text-kannada-red" />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-bold text-kannada-ink">Complete 3 Lessons</p>
-                <div className="w-full h-1.5 bg-stone-100 rounded-full mt-2 overflow-hidden">
-                  <div className="w-1/3 h-full bg-kannada-red" />
-                </div>
-              </div>
-            </div>
-            <p className="text-[10px] font-medium text-stone-400">Reward: +50 XP</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-const StatBadge = ({ icon: Icon, value, color }: { icon: any, value: number | string, color: string }) => (
-  <div className={`flex items-center gap-2 px-4 py-2 bg-white rounded-2xl border border-stone-100 shadow-sm`}>
-    <Icon className={`w-4 h-4 ${color}`} />
-    <span className="text-sm font-bold font-mono">{value}</span>
-  </div>
-);
-
-const MandalaMap = ({ progress, onSelectLevel }: { progress: Level[], onSelectLevel: (id: string) => void }) => {
-  const categories = Array.from(new Set(progress.map(p => p.category)));
-
-  return (
-    <div className="max-w-4xl mx-auto px-6 py-12">
-      {categories.map((cat, catIdx) => (
-        <div key={`category-${catIdx}`} className="mb-20">
-          <div className="flex items-center gap-4 mb-12">
-            <div className="h-px flex-1 bg-stone-200" />
-            <h3 className="text-xs font-black uppercase tracking-[0.3em] text-stone-400">{cat}</h3>
-            <div className="h-px flex-1 bg-stone-200" />
-          </div>
-          
-          <div className="flex flex-wrap justify-center gap-12">
-            {progress.filter(p => p.category === cat).map((level, idx) => (
-              <motion.div
-                key={`level-${level.level_id}`}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: idx * 0.1 }}
-                className="flex flex-col items-center gap-4"
-              >
-                <button
-                  onClick={() => level.status !== 'locked' && onSelectLevel(level.level_id)}
-                  className={`mandala-node ${level.status}`}
-                >
-                  {level.status === 'completed' ? (
-                    <CheckCircle2 className="w-12 h-12 text-white" />
-                  ) : level.status === 'locked' ? (
-                    <BookOpen className="w-10 h-10 opacity-30" />
-                  ) : (
-                    <motion.div 
-                      key="active-indicator"
-                      initial={{ scale: 0.8 }}
-                      animate={{ scale: [0.8, 1.1, 0.8] }}
-                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                      className="relative"
-                    >
-                      <Sparkles className="w-12 h-12 text-kannada-gold" />
-                      <div className="absolute -inset-6 bg-kannada-gold/20 rounded-full animate-ping opacity-60" />
-                    </motion.div>
-                  )}
-                </button>
-                <div className="text-center">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400 block mb-1">
-                    Level {idx + 1}
-                  </span>
-                  <span className="text-sm font-bold text-stone-700">
-                    {level.level_id.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-                  </span>
-                </div>
-              </motion.div>
-            ))}
-          </div>
+const ContributionGraph = () => (
+  <div className="flex flex-col gap-2">
+    <div className="flex gap-1 overflow-x-auto pb-2 scrollbar-hide">
+      {Array.from({ length: 52 }).map((_, weekIdx) => (
+        <div key={weekIdx} className="flex flex-col gap-1">
+          {Array.from({ length: 7 }).map((_, dayIdx) => {
+            const level = contributionData[weekIdx * 7 + dayIdx]?.level || 0;
+            return (
+              <div 
+                key={dayIdx} 
+                className={`w-3 h-3 rounded-[2px] transition-colors duration-500
+                  ${level === 0 ? 'bg-white/5' : 
+                    level === 1 ? 'bg-emerald-900/40' : 
+                    level === 2 ? 'bg-emerald-700/60' : 
+                    level === 3 ? 'bg-emerald-500/80' : 
+                    'bg-emerald-400'}`} 
+              />
+            );
+          })}
         </div>
       ))}
     </div>
-  );
-};
-
-const LessonView = ({ lessonId, onComplete, onBack, onAddXp }: { lessonId: string, onComplete: () => void, onBack: () => void, onAddXp: (amt: number) => void }) => {
-  const [lesson, setLesson] = useState<Lesson | null>(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [userInput, setUserInput] = useState('');
-  const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
-  const [isFinished, setIsFinished] = useState(false);
-  const [aiTip, setAiTip] = useState<string | null>(null);
-  const [isTipLoading, setIsTipLoading] = useState(false);
-  const [isAudioLoading, setIsAudioLoading] = useState(false);
-
-  useEffect(() => {
-    const data = LESSONS[lessonId];
-    if (data) {
-      setLesson(data);
-    } else {
-      // Fallback if not in registry (should not happen with injection)
-      setLesson(null);
-    }
-  }, [lessonId]);
-
-  if (!lesson) return (
-    <div className="flex flex-col items-center justify-center h-full gap-4">
-      <div className="w-12 h-12 border-4 border-kannada-gold border-t-transparent rounded-full animate-spin" />
-      <p className="text-stone-400 font-bold">Synchronizing Academy Session...</p>
-      <button onClick={onBack} className="text-kannada-red font-bold mt-4">Go Back</button>
+    <div className="flex items-center justify-between text-[10px] text-stone-500 font-mono uppercase tracking-widest">
+      <span>Jan — Dec</span>
+      <div className="flex items-center gap-1.5">
+        <span>Less</span>
+        <div className="w-2.5 h-2.5 bg-white/5 rounded-[2px]" />
+        <div className="w-2.5 h-2.5 bg-emerald-900/40 rounded-[2px]" />
+        <div className="w-2.5 h-2.5 bg-emerald-700/60 rounded-[2px]" />
+        <div className="w-2.5 h-2.5 bg-emerald-500/80 rounded-[2px]" />
+        <div className="w-2.5 h-2.5 bg-emerald-400 rounded-[2px]" />
+        <span>More</span>
+      </div>
     </div>
-  );
+  </div>
+);
 
-  const currentItem = lesson.items[currentIndex];
-
-  const handleAudio = async (text: string) => {
-    setIsAudioLoading(true);
-    try {
-      await speakText(text);
-    } finally {
-      setIsAudioLoading(false);
-    }
-  };
-
-  const getAcademyHelp = async () => {
-    setIsTipLoading(true);
-    try {
-      const tip = await chatWithAi(`Give me a short, professional linguistic insight or cultural context for the Kannada word/letter "${currentItem.q}". Keep it very brief and prestigious.`, []);
-      setAiTip(tip);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsTipLoading(false);
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (feedback) return;
-
-    const isCorrect = userInput.toLowerCase().trim() === currentItem.a.toLowerCase().trim();
-    setFeedback(isCorrect ? 'correct' : 'wrong');
-
-    if (isCorrect) {
-      onAddXp(10);
-    }
-
-    setTimeout(() => {
-      if (isCorrect) {
-        if (currentIndex < lesson.items.length - 1) {
-          setCurrentIndex(prev => prev + 1);
-          setUserInput('');
-          setFeedback(null);
-        } else {
-          setIsFinished(true);
-        }
-      } else {
-        setFeedback(null);
-        setUserInput('');
-      }
-    }, 1200);
-  };
-
-  if (isFinished) {
-    return (
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="flex flex-col items-center justify-center h-full p-8 text-center"
-      >
-        <div className="w-32 h-32 bg-kannada-gold rounded-full flex items-center justify-center mb-8 shadow-2xl shadow-kannada-gold/30">
-          <Trophy className="w-16 h-16 text-white" />
-        </div>
-        <h2 className="text-5xl font-serif font-black mb-4">Shubhashayagalu!</h2>
-        <p className="text-stone-500 text-lg mb-12 max-w-md">You've successfully mastered the {lesson.title} module.</p>
-        <div className="flex gap-4">
-          <button onClick={onComplete} className="btn-primary">Continue Path</button>
-        </div>
-      </motion.div>
-    );
-  }
+const Navbar = ({ onHome, onNewRepo, onProfile, notifications, currentUser }: { 
+  onHome: () => void, 
+  onNewRepo: () => void, 
+  onProfile: () => void,
+  notifications: ForgeNotification[],
+  currentUser: UserProfile 
+}) => {
+  const [showNotifications, setShowNotifications] = useState(false);
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
-    <div className="max-w-3xl mx-auto h-full flex flex-col p-8">
-      <div className="flex items-center justify-between mb-16">
-        <button onClick={onBack} className="p-3 hover:bg-stone-100 rounded-2xl transition-colors">
-          <ChevronLeft className="w-6 h-6" />
+    <nav className="h-16 border-b border-white/5 bg-stone-950/80 backdrop-blur-xl flex items-center justify-between px-6 sticky top-0 z-[100]">
+      <div className="flex items-center gap-8">
+        <button onClick={onHome} className="flex items-center gap-2.5 group">
+          <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform duration-500">
+            <Hash className="w-5 h-5 text-stone-950 stroke-[3px]" />
+          </div>
+          <span className="font-serif font-black text-xl tracking-tight text-white uppercase italic">Forge</span>
         </button>
-        <div className="flex-1 mx-12 h-4 bg-stone-100 rounded-full overflow-hidden p-1 shadow-inner">
-          <motion.div 
-            className="progress-bar-fill"
-            initial={{ width: 0 }}
-            animate={{ width: `${((currentIndex) / lesson.items.length) * 100}%` }}
+
+        <div className="relative group hidden md:block">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-500 group-focus-within:text-emerald-400 transition-colors" />
+          <input 
+            type="text" 
+            placeholder="Search network, repos, commands..." 
+            className="bg-white/5 border border-white/5 rounded-full py-2 pl-10 pr-4 w-80 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500/50 focus:bg-white/10 transition-all font-medium"
           />
         </div>
-        <span className="text-xs font-black font-mono text-stone-400">{currentIndex + 1} / {lesson.items.length}</span>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center text-center">
-        <motion.div
-          key={currentIndex}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full"
-        >
-          <span className="text-xs font-black uppercase tracking-[0.2em] text-kannada-gold mb-6 block">Translate the character</span>
-          <h1 className="text-9xl font-kannada mb-8 text-kannada-ink">{currentItem.q}</h1>
-          <div className="flex items-center justify-center gap-4 mb-16">
-            <div className="glass-card p-6 inline-block">
-              <p className="text-stone-500 font-medium italic">"{currentItem.t}"</p>
-            </div>
-            <button 
-              onClick={() => handleAudio(currentItem.q)}
-              disabled={isAudioLoading}
-              className="w-16 h-16 bg-white border border-stone-200 rounded-full flex items-center justify-center text-kannada-gold hover:bg-stone-50 transition-colors shadow-sm disabled:opacity-50"
-            >
-              {isAudioLoading ? (
-                <div className="w-6 h-6 border-2 border-kannada-gold border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Volume2 className="w-8 h-8" />
-              )}
-            </button>
-            <button 
-              onClick={getAcademyHelp}
-              disabled={isTipLoading}
-              className="w-16 h-16 bg-kannada-gold/10 border border-kannada-gold/20 rounded-full flex items-center justify-center text-kannada-gold hover:bg-kannada-gold/20 transition-colors shadow-sm"
-              title="Academy Insight"
-            >
-              <Library className={`w-8 h-8 ${isTipLoading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-
+      <div className="flex items-center gap-4">
+        <div className="relative">
+          <button 
+            onClick={() => setShowNotifications(!showNotifications)}
+            className="p-2 text-stone-400 hover:text-white transition-colors relative"
+          >
+            <Bell className="w-5 h-5" />
+            {unreadCount > 0 && (
+              <div className="absolute top-2 right-2 w-2 h-2 bg-emerald-500 rounded-full border-2 border-stone-950" />
+            )}
+          </button>
+          
           <AnimatePresence>
-            {aiTip && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="max-w-md mx-auto mb-10 overflow-hidden"
+            {showNotifications && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className="absolute right-0 mt-4 w-80 bg-stone-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-[500]"
               >
-                <div className="bg-kannada-cream p-6 rounded-[2rem] border border-kannada-gold/20 relative">
-                  <button onClick={() => setAiTip(null)} className="absolute top-4 right-4 text-stone-300 hover:text-kannada-ink">
-                    <X className="w-4 h-4" />
-                  </button>
-                  <div className="flex gap-4 items-start text-left">
-                    <div className="w-10 h-10 bg-kannada-gold rounded-2xl flex items-center justify-center shrink-0">
-                      <Library className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-kannada-gold mb-1">Academic Insight</p>
-                      <p className="text-stone-600 font-medium leading-relaxed">{aiTip}</p>
-                    </div>
-                  </div>
+                <div className="p-4 border-b border-white/5 bg-white/5 flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-stone-400 font-mono">Notifications</span>
+                  {unreadCount > 0 && <span className="text-[9px] bg-emerald-500 text-stone-950 px-1.5 py-0.5 rounded-full font-bold">New</span>}
+                </div>
+                <div className="max-h-96 overflow-y-auto divide-y divide-white/5">
+                  {notifications.length > 0 ? (
+                    notifications.map(n => (
+                      <div key={n.id} className={`p-4 hover:bg-white/5 transition-colors cursor-pointer ${!n.read ? 'bg-emerald-500/5' : ''}`}>
+                        <p className="text-xs text-stone-300 leading-snug">
+                          <span className="text-white font-bold">{n.user}</span> {n.type === 'like' ? 'liked your repository' : n.type === 'push' ? 'pushed to' : n.type === 'follow' ? 'followed you' : 'commented on'} <span className="text-emerald-400 font-mono">{n.target}</span>
+                        </p>
+                        <span className="text-[9px] font-mono text-stone-600 mt-1 block uppercase">{n.time}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-8 text-center text-[10px] font-mono text-stone-600 uppercase tracking-widest">Quiet Sector</div>
+                  )}
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
+        </div>
 
-          <form onSubmit={handleSubmit} className="w-full max-w-md mx-auto relative">
-            <input
-              autoFocus
-              type="text"
-              value={userInput}
-              onChange={(e) => setUserInput(e.target.value)}
-              placeholder="Type in English..."
-              className={`w-full p-6 text-center text-2xl font-bold border-b-4 bg-transparent outline-none transition-all ${
-                feedback === 'correct' ? 'border-green-500 text-green-600' : 
-                feedback === 'wrong' ? 'border-red-500 text-red-600' : 
-                'border-stone-200 focus:border-kannada-gold'
-              }`}
-              disabled={!!feedback}
-            />
-            <AnimatePresence>
-              {feedback && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="absolute -bottom-16 left-0 right-0 flex items-center justify-center gap-2"
-                >
-                  {feedback === 'correct' ? (
-                    <div className="flex items-center gap-2 px-6 py-2 bg-green-50 text-green-600 rounded-full font-bold">
-                      <CheckCircle2 className="w-5 h-5" /> Correct! +10 XP
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center gap-1 px-6 py-3 bg-red-50 text-red-600 rounded-[1.5rem] font-bold">
-                      <div className="flex items-center gap-2">
-                        <XCircle className="w-5 h-5" /> Try again
-                      </div>
-                      <p className="text-xs text-red-400 font-mono">Correct: {currentItem.a}</p>
-                    </div>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </form>
-        </motion.div>
-      </div>
-
-      <div className="py-12 flex justify-center">
         <button 
-          onClick={handleSubmit}
-          disabled={!userInput || !!feedback}
-          className="btn-primary w-full max-w-md"
+          onClick={onNewRepo}
+          className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-1.5 rounded-lg transition-colors group"
         >
-          Check Answer
+          <Plus className="w-4 h-4 text-stone-400 group-hover:text-emerald-400" />
+          <ChevronDown className="w-3 h-3 text-stone-400" />
+        </button>
+        <button 
+          onClick={onProfile}
+          className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 p-0.5 cursor-pointer hover:scale-105 transition-transform"
+        >
+          <img src={currentUser.avatar} className="w-full h-full rounded-full border-2 border-stone-950 bg-stone-900 object-cover" alt="" />
         </button>
       </div>
-    </div>
+    </nav>
   );
 };
 
-const StoryPlayer = ({ storyId, content, onComplete, onBack, isLoading }: { storyId?: string, content?: StoryContent | null, onComplete: () => void, onBack: () => void, isLoading?: boolean }) => {
-  const [story, setStory] = useState<StoryContent | null>(null);
-  const [currentSceneId, setCurrentSceneId] = useState('start');
-  const [isAudioLoading, setIsAudioLoading] = useState(false);
-
-  useEffect(() => {
-    if (content) {
-      setStory(content);
-    } else if (storyId) {
-      const data = STORY_CONTENT[storyId];
-      if (data) setStory(data);
-    }
-  }, [storyId, content]);
-
-  const handleAudio = async (text: string) => {
-    setIsAudioLoading(true);
-    try {
-      await speakText(text);
-    } finally {
-      setIsAudioLoading(false);
-    }
-  };
-
-  if (isLoading) return (
-    <div className="flex flex-col items-center justify-center h-screen gap-6">
-      <div className="w-20 h-20 border-4 border-kannada-red border-t-transparent rounded-full animate-spin" />
-      <h3 className="text-2xl font-serif font-black animate-pulse">Kala is composing a new tale...</h3>
-    </div>
-  );
-
-  if (!story) return <div className="flex items-center justify-center h-screen">Loading Story...</div>;
-
-  const scene = story.scenes.find(s => s.id === currentSceneId);
-  if (!scene) return <div>Scene not found</div>;
-
-  return (
-    <div className="max-w-4xl mx-auto p-8 h-full flex flex-col">
-      <div className="flex items-center justify-between mb-12">
-        <button onClick={onBack} className="p-3 hover:bg-stone-100 rounded-2xl transition-colors">
-          <ChevronLeft className="w-6 h-6" />
-        </button>
-        <h2 className="text-2xl font-serif font-black">{story.title}</h2>
-        <div className="w-12" />
+const RepoCard: React.FC<{ repo: Repository, onClick: () => void, onLike: (e: React.MouseEvent) => void }> = ({ repo, onClick, onLike }) => (
+  <motion.div 
+    whileHover={{ y: -4 }}
+    onClick={onClick}
+    className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 hover:bg-white/[0.04] hover:border-white/10 transition-all cursor-pointer group"
+  >
+    <div className="flex items-start justify-between mb-4">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center shrink-0">
+          <BookOpen className="w-5 h-5 text-stone-400" />
+        </div>
+        <div>
+          <h3 className="font-bold text-lg text-white group-hover:text-emerald-400 transition-colors flex items-center gap-2">
+            {repo.name}
+            <span className="text-[10px] font-mono font-black uppercase tracking-tighter bg-white/5 px-2 py-0.5 rounded-full text-stone-500 border border-white/5">
+              {repo.visibility}
+            </span>
+          </h3>
+          <p className="text-white/40 text-[10px] font-medium tracking-wide uppercase">by {repo.owner}</p>
+        </div>
       </div>
+      <button className="text-stone-500 hover:text-white"><Star className="w-5 h-5" /></button>
+    </div>
+    
+    <p className="text-stone-400 text-sm line-clamp-2 mb-6 font-medium leading-relaxed">
+      {repo.description}
+    </p>
 
-      <div className="flex-1 overflow-y-auto pb-20">
-        <motion.div
-          key={currentSceneId}
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="glass-card overflow-hidden"
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-6">
+        <div className="flex items-center gap-1.5">
+          <div className={`w-2 h-2 rounded-full ${repo.languageColor}`} />
+          <span className="text-xs font-mono text-stone-500">{repo.language}</span>
+        </div>
+        <div 
+          onClick={(e) => { e.stopPropagation(); onLike(e); }}
+          className="flex items-center gap-1.5 text-stone-500 hover:text-pink-500 transition-colors"
         >
-          <img src={scene.image} alt="Scene" className="w-full h-80 object-cover" referrerPolicy="no-referrer" />
-          <div className="p-10">
-            <div className="flex gap-4 items-center mb-8">
-              <h3 className="text-5xl font-kannada leading-tight text-kannada-ink flex-1">{scene.text}</h3>
+          <Heart className="w-3.5 h-3.5" />
+          <span className="text-xs font-mono">{repo.likes}</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-stone-500 hover:text-emerald-500 transition-colors">
+          <MessageSquare className="w-3.5 h-3.5" />
+          <span className="text-xs font-mono">{repo.comments}</span>
+        </div>
+      </div>
+      <span className="text-[10px] text-stone-600 font-mono italic uppercase tracking-widest">{repo.updatedAt}</span>
+    </div>
+  </motion.div>
+);
+
+const Dashboard = ({ repos, onSelectRepo, onNewRepo, users, onFollow, onLike }: { 
+  repos: Repository[], 
+  onSelectRepo: (r: Repository) => void, 
+  onNewRepo: () => void,
+  users: UserProfile[],
+  onFollow: (id: string) => void,
+  onLike: (id: string) => void
+}) => (
+  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in duration-700">
+    <div className="lg:col-span-8 space-y-8">
+      {/* Welcome Section */}
+      <section>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-black text-white flex items-center gap-3">
+            Repositories 
+            <span className="bg-white/5 text-[10px] px-2 py-1 rounded-md font-mono text-emerald-400 border border-emerald-500/20">{repos.length} ACTIVE</span>
+          </h2>
+          <div className="flex gap-2">
+            <button className="p-2 border border-white/5 rounded-lg text-stone-400 hover:bg-white/5 transition-colors"><Filter className="w-4 h-4" /></button>
+            <button className="p-2 border border-white/5 rounded-lg text-stone-400 hover:bg-white/5 transition-colors"><MoreHorizontal className="w-4 h-4" /></button>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {repos.map(repo => (
+            <RepoCard key={repo.id} repo={repo} onClick={() => onSelectRepo(repo)} onLike={() => onLike(repo.id)} />
+          ))}
+          <motion.div 
+            whileHover={{ scale: 0.99 }}
+            onClick={onNewRepo}
+            className="border-2 border-dashed border-white/5 rounded-2xl flex flex-col items-center justify-center p-8 text-stone-500 hover:border-emerald-500/30 hover:text-emerald-400 transition-all cursor-pointer group min-h-[160px]"
+          >
+            <Plus className="w-8 h-8 mb-2 group-hover:rotate-90 transition-transform duration-500" />
+            <span className="font-mono text-xs font-black uppercase tracking-widest">Construct New Workspace</span>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Global Activity Feed */}
+      <section className="bg-white/[0.01] border border-white/5 rounded-3xl p-8">
+        <h3 className="text-sm font-black uppercase tracking-[0.2em] text-stone-500 mb-8 font-mono flex items-center justify-between">
+          Network Pulse (Friends)
+          <Zap className="w-4 h-4 text-emerald-400" />
+        </h3>
+        <div className="space-y-12">
+           {[
+             { user: 'alix-dev', action: 'pushed to', target: 'nebula-engine', time: '12m ago', likes: 24, comments: 2, avatar: 'https://i.pravatar.cc/150?u=alix' },
+             { user: 'sarah-code', action: 'merged PR', target: 'quantum-ui', time: '2h ago', likes: 12, comments: 5, avatar: 'https://i.pravatar.cc/150?u=sarah' },
+             { user: 'mike-writes', action: 'started following', target: 'your node', time: '5h ago', likes: 2, comments: 0, avatar: 'https://i.pravatar.cc/150?u=mike' }
+           ].map((activity, i) => (
+             <div key={i} className="flex gap-4">
+               <img src={activity.avatar} className="w-10 h-10 rounded-xl border border-white/10" alt="" />
+               <div className="flex-1">
+                 <p className="text-sm text-stone-300">
+                    <span className="text-white font-bold hover:text-emerald-400 cursor-pointer">{activity.user}</span> {activity.action} <span className="text-emerald-400 font-mono italic">{activity.target}</span>
+                 </p>
+                 <span className="text-[10px] font-mono text-stone-600 block mt-1 uppercase">{activity.time}</span>
+                 
+                 <div className="flex items-center gap-4 mt-4">
+                    <button className="flex items-center gap-1.5 text-stone-500 hover:text-pink-500 transition-colors">
+                      <Heart className="w-4 h-4" /> <span className="text-[10px] font-mono uppercase">{activity.likes}</span>
+                    </button>
+                    <button className="flex items-center gap-1.5 text-stone-500 hover:text-emerald-500 transition-colors">
+                      <MessageSquare className="w-4 h-4" /> <span className="text-[10px] font-mono uppercase">{activity.comments}</span>
+                    </button>
+                    <button className="flex items-center gap-1.5 text-stone-500 hover:text-white transition-colors">
+                      <GitFork className="w-4 h-4" />
+                    </button>
+                 </div>
+               </div>
+             </div>
+           ))}
+        </div>
+      </section>
+    </div>
+
+    {/* Sidebar Content */}
+    <div className="lg:col-span-4 space-y-6">
+      <div className="bg-white/[0.01] border border-white/5 rounded-3xl p-8 sticky top-24">
+        <h4 className="text-[10px] font-black uppercase tracking-widest text-stone-500 mb-6 flex items-center justify-between">
+          Social Reach
+          <Clock className="w-3 h-3" />
+        </h4>
+        <div className="grid grid-cols-2 gap-4 mb-8">
+           <div className="bg-white/5 p-4 rounded-2xl border border-white/5 text-center">
+             <span className="block text-xl font-bold text-white">1.2k</span>
+             <span className="text-[9px] font-mono text-stone-500 uppercase tracking-widest">Followers</span>
+           </div>
+           <div className="bg-white/5 p-4 rounded-2xl border border-white/5 text-center">
+             <span className="block text-xl font-bold text-white">430</span>
+             <span className="text-[9px] font-mono text-stone-500 uppercase tracking-widest">Following</span>
+           </div>
+        </div>
+
+        <h4 className="text-[10px] font-black uppercase tracking-widest text-stone-500 mb-4 font-mono">Suggested Experts</h4>
+        <div className="space-y-4">
+          {users.filter(u => !u.isFriend).map(user => (
+            <div key={user.id} className="flex items-center justify-between group">
+              <div className="flex items-center gap-3">
+                <img src={user.avatar} className="w-8 h-8 rounded-lg border border-white/10" alt="" />
+                <span className="text-xs font-bold text-white group-hover:text-emerald-400 transition-colors">{user.username}</span>
+              </div>
               <button 
-                onClick={() => handleAudio(scene.text)}
-                disabled={isAudioLoading}
-                className="w-16 h-16 bg-kannada-gold/10 rounded-full flex items-center justify-center text-kannada-gold shrink-0 hover:bg-kannada-gold/20 transition-all disabled:opacity-50"
+                onClick={() => onFollow(user.id)}
+                className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg hover:bg-emerald-500 hover:text-stone-950 transition-all border border-emerald-500/20"
               >
-                {isAudioLoading ? (
-                  <div className="w-6 h-6 border-2 border-kannada-gold border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Volume2 className="w-8 h-8" />
-                )}
+                <Plus className="w-3 h-3" />
               </button>
             </div>
-            <div className="flex flex-col gap-2 mb-12">
-              <p className="text-xl text-kannada-gold font-bold">{scene.transliteration}</p>
-              <p className="text-stone-400 italic text-lg">"{scene.translation}"</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {scene.choices.length > 0 ? (
-                scene.choices.map((choice, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentSceneId(choice.next)}
-                    className="p-6 text-left border-2 border-stone-100 rounded-3xl hover:border-kannada-gold hover:bg-kannada-gold/5 transition-all group"
-                  >
-                    <span className="text-xl font-bold text-stone-700 group-hover:text-kannada-gold">{choice.text}</span>
-                  </button>
-                ))
-              ) : (
-                <button
-                  onClick={onComplete}
-                  className="btn-primary w-full"
-                >
-                  Complete Story
-                </button>
-              )}
-            </div>
-          </div>
-        </motion.div>
+          ))}
+        </div>
       </div>
     </div>
-  );
-};
+  </div>
+);
 
-const StoryList = ({ onSelectStory, onAiStory }: { onSelectStory: (id: string) => void, onAiStory: () => void }) => {
-  return (
-    <div className="max-w-5xl mx-auto p-8 mb-20">
-      <div className="flex justify-center mb-16">
-        <button 
-          onClick={onAiStory}
-          className="px-12 py-6 bg-kannada-ink text-white rounded-[2.5rem] font-serif font-black text-2xl flex items-center gap-6 hover:scale-105 transition-all shadow-2xl shadow-kannada-ink/20"
-        >
-          <Sparkles className="w-8 h-8 text-kannada-gold" />
-          Tell Me an Infinite Story
-        </button>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {STORIES.map((story) => (
-          <motion.div
-            key={story.id}
-            whileHover={{ y: -8 }}
-            className="glass-card p-8 flex flex-col justify-between hover:shadow-2xl hover:shadow-stone-200 transition-all"
-          >
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <span className="px-4 py-1.5 bg-kannada-gold/10 text-kannada-gold text-[10px] font-black rounded-full uppercase tracking-widest">
-                  {story.level}
-                </span>
-                <BookOpen className="w-6 h-6 text-stone-200" />
-              </div>
-              <h3 className="text-3xl font-serif font-black mb-4">{story.title}</h3>
-              <p className="text-stone-500 leading-relaxed mb-8">Dive into an immersive narrative experience designed to build your vocabulary naturally.</p>
-            </div>
-            <button
-              onClick={() => onSelectStory(story.id)}
-              className="btn-primary w-full flex items-center justify-center gap-3"
-            >
-              Begin Journey <ChevronRight className="w-5 h-5" />
-            </button>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
-};
+const FileBrowser = ({ nodes, onSelectFile }: { nodes: FileNode[], onSelectFile: (f: FileNode) => void }) => {
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['src']));
 
-export default function App() {
-  const [view, setView] = useState<'map' | 'lesson' | 'stories' | 'story-player' | 'culture' | 'chat' | 'friends'>('map');
-  const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
-  const [selectedStory, setSelectedStory] = useState<string | null>(null);
-  const [progress, setProgress] = useState<Level[]>([]);
-  const [userStats, setUserStats] = useState<UserStats>({ xp: 0, streak: 0, hearts: 5 });
-  const [masteryInsight, setMasteryInsight] = useState<{kannada: string, english: string, transliteration: string, explanation: string} | null>(null);
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [isAudioLoading, setIsAudioLoading] = useState(false);
-  const [showInsightModal, setShowInsightModal] = useState(false);
-  const [isAppLoading, setIsAppLoading] = useState(true);
-  
-  // Chat state
-  const [chatHistory, setChatHistory] = useState<Message[]>([]);
-  const [isChatLoading, setIsChatLoading] = useState(false);
-  const [chatMode, setChatMode] = useState<'tutor' | 'general'>('tutor');
-
-  const clearChat = () => setChatHistory([]);
-
-  // Narrative state
-  const [aiStory, setAiStory] = useState<StoryContent | null>(null);
-  const [isStoryLoading, setIsStoryLoading] = useState(false);
-
-  useEffect(() => {
-    // Splash screen effect
-    const timer = setTimeout(() => setIsAppLoading(false), 2000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const fetchData = () => {
-    const savedProgress = localStorage.getItem('kala-kannada-progress');
-    const savedStats = localStorage.getItem('kala-kannada-stats');
-
-    if (savedProgress) {
-      setProgress(JSON.parse(savedProgress));
-    } else {
-      setProgress(INITIAL_PROGRESS);
-      localStorage.setItem('kala-kannada-progress', JSON.stringify(INITIAL_PROGRESS));
-    }
-
-    if (savedStats) {
-      setUserStats(JSON.parse(savedStats));
-    } else {
-      const initialStats = { xp: 0, streak: 0, hearts: 5 };
-      setUserStats(initialStats);
-      localStorage.setItem('kala-kannada-stats', JSON.stringify(initialStats));
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const startInfinitePractice = async () => {
-    setView('lesson');
-    setIsAiLoading(true);
-    try {
-      const lessonData = await generateInfiniteLesson();
-      const levelId = `infinite-${Date.now()}`;
-      
-      const newLevel: Level = {
-        level_id: levelId,
-        category: 'Mastery',
-        status: 'unlocked',
-        score: 0
-      };
-      
-      // Inject session data into registry
-      LESSONS[levelId] = { 
-        title: lessonData.title || "Advanced Mastery", 
-        items: lessonData.items || [] 
-      };
-      
-      setSelectedLevel(levelId);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
-
-  const addXp = (amt: number) => {
-    setUserStats(prev => {
-      const newStats = { ...prev, xp: prev.xp + amt };
-      localStorage.setItem('kala-kannada-stats', JSON.stringify(newStats));
-      return newStats;
+  const toggleFolder = (name: string) => {
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
     });
   };
 
-  const handleAudio = async (text: string) => {
-    setIsAudioLoading(true);
-    try {
-      await speakText(text);
-    } finally {
-      setIsAudioLoading(false);
-    }
+  const renderNode = (node: FileNode, depth = 0) => {
+    const isFolder = node.type === 'folder';
+    const isExpanded = expandedFolders.has(node.name);
+
+    return (
+      <div key={node.name}>
+        <div 
+          onClick={() => isFolder ? toggleFolder(node.name) : onSelectFile(node)}
+          className={`group flex items-center gap-3 py-2.5 px-4 hover:bg-white/5 rounded-lg cursor-pointer transition-all border border-transparent hover:border-white/5 ${depth > 0 ? 'ml-4' : ''}`}
+        >
+          {isFolder ? (
+            <motion.div animate={{ rotate: isExpanded ? 90 : 0 }}>
+              <ChevronRight className="w-3.5 h-3.5 text-stone-500" />
+            </motion.div>
+          ) : (
+            <div className="w-3.5" />
+          )}
+          {isFolder ? <Folder className="w-4 h-4 text-emerald-400" /> : <FileText className="w-4 h-4 text-stone-500" />}
+          <span className={`text-sm font-medium ${isFolder ? 'text-white' : 'text-stone-400 group-hover:text-white'}`}>{node.name}</span>
+          <span className="ml-auto text-[10px] font-mono text-stone-600 opacity-0 group-hover:opacity-100 transition-opacity">
+            {node.size || ''}
+          </span>
+        </div>
+        {isFolder && isExpanded && node.children && (
+          <div className="mt-0.5">
+            {node.children.map(child => renderNode(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
   };
 
-  const openInsightPortal = async () => {
-    setShowInsightModal(true);
-    setIsAiLoading(true);
-    try {
-      const sentence = await generatePracticeSentence(selectedLevel || 'General Greetings');
-      setMasteryInsight(sentence);
-    } catch (error) {
-      console.error("Session Insight Error:", error);
-    } finally {
-      setIsAiLoading(false);
-    }
+  return <div className="p-2 space-y-0.5">{nodes.map(node => renderNode(node))}</div>;
+};
+
+const CodeViewer = ({ file, onBack }: { file: FileNode, onBack: () => void }) => (
+  <div className="bg-white/[0.01] border border-white/5 rounded-3xl overflow-hidden glass-card">
+    <div className="bg-white/5 px-6 py-4 border-b border-white/5 flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="p-2 hover:bg-white/5 rounded-lg text-stone-500 hover:text-white transition-colors">
+          <ChevronRight className="w-5 h-5 rotate-180" />
+        </button>
+        <div className="flex flex-col">
+          <span className="text-white font-bold text-sm tracking-tight">{file.name}</span>
+          <span className="text-[10px] font-mono text-stone-500 uppercase tracking-widest">{file.size}</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <button className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-stone-400 text-xs font-mono rounded-lg border border-white/5">Raw</button>
+        <button className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-stone-400 text-xs font-mono rounded-lg border border-white/5">Blame</button>
+      </div>
+    </div>
+    <div className="p-8 overflow-x-auto min-h-[400px]">
+      <pre className="font-mono text-sm leading-relaxed">
+        <code>
+          {file.content?.split('\n').map((line, i) => (
+            <div key={i} className="flex gap-8 group">
+              <span className="w-12 text-right shrink-0 select-none text-stone-600 group-hover:text-stone-400 transition-colors">{i + 1}</span>
+              <span className="text-emerald-400/90">{line || ' '}</span>
+            </div>
+          ))}
+        </code>
+      </pre>
+    </div>
+  </div>
+);
+
+const RepositoryDetail = ({ repo, onLike, onBack }: { repo: Repository, onLike: (id: string) => void, onBack: () => void }) => {
+  const [activeTab, setActiveTab] = useState<'code' | 'issues' | 'pulls' | 'actions' | 'insights' | 'settings'>('code');
+  const [intelFile, setIntelFile] = useState<{name: string, content: string} | null>(null);
+  const [selectedFile, setSelectedFile] = useState<FileNode | null>(null);
+  const [currentBranch, setCurrentBranch] = useState('main');
+  const [issues, setIssues] = useState<Issue[]>(MOCK_ISSUES);
+
+  const addIssue = () => {
+    const title = prompt("Enter operation title:");
+    if (!title) return;
+    const newIssue: Issue = {
+      id: Math.floor(Math.random() * 1000),
+      title,
+      status: 'open',
+      label: 'Task',
+      author: 'you',
+      createdAt: 'just now',
+      comments: 0
+    };
+    setIssues([newIssue, ...issues]);
   };
 
-  const handleSendMessage = async (msg: string) => {
-    if (!msg.trim()) return;
-    const userMsg: Message = { role: 'user', parts: [{ text: msg }] };
-    const updatedHistory = [...chatHistory, userMsg];
-    setChatHistory(updatedHistory);
-    setIsChatLoading(true);
-
-    try {
-      let systemInstruction = "You are a distinguished Kannada language mentor. Your purpose is to facilitate fluent conversation and deep cultural understanding. Communicate with professional elegance. When providing Kannada, always include the script (ಅಕ್ಷರ), the standard transliteration, and the English meaning. Maintain a supportive, human-like persona. Avoid any technical references to being an artificial intelligence.";
-      
-      if (chatMode === 'general') {
-        systemInstruction = "You are a highly knowledgeable and professional consultant for Karnataka's heritage. You provide accurate, concise, and helpful information on a wide range of topics. Your tone is academic yet accessible.";
-      }
-
-      const aiResponse = await chatWithAi(msg, updatedHistory, systemInstruction); 
-      
-      const modelMsg: Message = { role: 'model', parts: [{ text: aiResponse }] };
-      setChatHistory(prev => [...prev, modelMsg]);
-    } catch (error) {
-      console.error("Chat Error:", error);
-      const errorMsg: Message = { role: 'model', parts: [{ text: "The network was interrupted. Please try re-sending your message." }] };
-      setChatHistory(prev => [...prev, errorMsg]);
-    } finally {
-      setIsChatLoading(false);
-    }
-  };
-
-  const handleAiStory = async () => {
-    setView('story-player');
-    setIsStoryLoading(true);
-    setAiStory(null);
-    setSelectedStory(null);
-    try {
-      const storyData = await generateStory();
-      if (!storyData || !storyData.scenes || storyData.scenes.length === 0) {
-        throw new Error("Malformed story data");
-      }
-      
-      const formatted: StoryContent = {
-        title: storyData.title || "New Narrative",
-        scenes: storyData.scenes.map((s: any) => ({
-          ...s,
-          image: `https://images.unsplash.com/photo-1544413155-257a44f77259?w=800&q=80&sig=${Math.random()}&${s.imageSearchTerm || 'karnataka'}`
-        }))
-      };
-      setAiStory(formatted);
-    } catch (error) {
-      console.error("Narration Error:", error);
-      // Robust Fallback Story
-      setAiStory({
-        title: "The Golden Bird",
-        scenes: [
-          {
-            id: 'start',
-            text: 'ಒಂದು ಕಾಡಿನಲ್ಲಿ ಒಂದು ಬಂಗಾರದ ಹಕ್ಕಿ ಇತ್ತು.',
-            transliteration: 'Ondu kaadinalli ondu bangaarada hakki ittu.',
-            translation: 'In a forest, there was a golden bird.',
-            image: 'https://images.unsplash.com/photo-1544413155-257a44f77259?w=800&q=80',
-            choices: [{ text: 'Follow the bird', next: 'end' }]
-          },
-          {
-            id: 'end',
-            text: 'ಹಕ್ಕಿ ಹಾರಿ ಹೋಯಿತು.',
-            transliteration: 'Hakki haari hoyitu.',
-            translation: 'The bird flew away.',
-            image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=800&q=80',
-            choices: []
-          }
-        ]
-      });
-    } finally {
-      setIsStoryLoading(false);
-    }
-  };
-
-  const handleSelectLevel = (id: string) => {
-    setSelectedLevel(id);
-    setView('lesson');
-  };
-
-  const handleLessonComplete = () => {
-    if (selectedLevel) {
-      const newProgress = [...progress];
-      const currentIndex = newProgress.findIndex(p => p.level_id === selectedLevel);
-      
-      if (currentIndex !== -1) {
-        newProgress[currentIndex].status = 'completed';
-        const nextLevel = newProgress[currentIndex + 1];
-        if (nextLevel && nextLevel.status === 'locked') {
-          nextLevel.status = 'unlocked';
-        }
-        setProgress(newProgress);
-        localStorage.setItem('kala-kannada-progress', JSON.stringify(newProgress));
-      }
-      
-      // If it was an infinite session, just clear it
-      setView('map');
-      setSelectedLevel(null);
-    }
-  };
-
-  const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'Kala Kannada',
-          text: 'Master Kannada with art and immersive stories!',
-          url: window.location.href,
-        });
-      } catch (error) {
-        console.log('Error sharing', error);
-      }
-    } else {
-      navigator.clipboard.writeText(window.location.href);
-      alert('Link copied to clipboard!');
-    }
+  const triggerAudit = (file?: FileNode) => {
+    setIntelFile({ 
+      name: file?.name || 'main.rs', 
+      content: file?.content || '// Core physics engine implementation\nuse spatial_hash::Grid;\n\npub struct Nebula {\n    grid: Grid,\n    entities: Vec<Entity>,\n}\n\nimpl Nebula {\n    pub fn step(&mut self) {\n        // Parallel entity simulation\n        self.entities.par_iter_mut().for_each(|e| e.update());\n        self.grid.rebuild(&self.entities);\n    }\n}' 
+    });
   };
 
   return (
-    <div className="min-h-screen bg-kannada-cream selection:bg-kannada-gold/30">
+    <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
       <AnimatePresence>
-        {isAppLoading && <LoadingOverlay message="Synchronizing Academy Portals..." />}
-        {isStoryLoading && <LoadingOverlay message="Composing Folklore Narrative..." />}
+        {intelFile && (
+          <ForgeIntelligence 
+            fileName={intelFile.name} 
+            content={intelFile.content} 
+            onClose={() => setIntelFile(null)} 
+          />
+        )}
       </AnimatePresence>
 
-      {/* Bottom Navigation for Mobile */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 h-20 bg-white/90 backdrop-blur-xl border-t border-stone-100 z-[100] flex items-center justify-around px-6 pb-safe">
-        {[
-          { id: 'map', label: 'Path', icon: LayoutGrid },
-          { id: 'chat', label: 'Dialogue', icon: Sparkles },
-          { id: 'stories', label: 'Folklore', icon: BookOpen },
-          { id: 'friends', label: 'Social', icon: User },
-          { id: 'culture', label: 'Heritage', icon: Library },
-        ].map(item => (
-          <button 
-            key={`mobile-${item.id}`}
-            onClick={() => setView(item.id as any)}
-            className={`flex flex-col items-center gap-1 transition-all ${
-              view === item.id || (view === 'lesson' && item.id === 'map') || (view === 'story-player' && item.id === 'stories')
-                ? 'text-kannada-red' 
-                : 'text-stone-300'
-            }`}
-          >
-            <item.icon className="w-6 h-6" />
-            <span className="text-[10px] font-black uppercase tracking-widest">{item.label}</span>
-          </button>
-        ))}
+      {/* Header */}
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+           <button onClick={onBack} className="p-2 bg-white/5 rounded-xl text-stone-400 hover:text-white transition-colors border border-white/5">
+             <ChevronRight className="w-5 h-5 rotate-180" />
+           </button>
+           <nav className="flex items-center gap-2 text-sm text-stone-500 font-mono">
+             <span className="hover:text-white cursor-pointer">{repo.owner}</span>
+             <span>/</span>
+             <span className="text-white font-bold">{repo.name}</span>
+             <span className="bg-white/5 text-[10px] px-2 py-0.5 rounded-full border border-white/5 text-emerald-400">{repo.visibility}</span>
+           </nav>
+        </div>
+
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-center gap-6 overflow-x-auto pb-4 lg:pb-0 scrollbar-hide">
+            {[
+              { id: 'code', icon: Code2, label: 'Source' },
+              { id: 'issues', icon: ListTodo, label: 'Issues', count: 12 },
+              { id: 'pulls', icon: GitPullRequest, label: 'Pull Requests', count: 4 },
+              { id: 'actions', icon: Play, label: 'Actions' },
+              { id: 'insights', icon: BarChart3, label: 'Insights' },
+              { id: 'settings', icon: Settings, label: 'Settings' }
+            ].map(tab => (
+              <button 
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center gap-2 px-1 py-4 border-b-2 transition-all shrink-0 font-mono uppercase tracking-widest text-[10px] font-black ${
+                  activeTab === tab.id 
+                    ? 'border-emerald-500 text-white' 
+                    : 'border-transparent text-stone-500 hover:text-white hover:border-white/10'
+                }`}
+              >
+                <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-emerald-400 mt-[-1px]' : ''}`} />
+                {tab.label}
+                {tab.count !== undefined && (
+                  <span className="bg-white/10 px-1.5 rounded-md text-[9px] group-hover:bg-white/20">{tab.count}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-xl overflow-hidden border border-white/5">
+              <button 
+                onClick={() => onLike(repo.id)}
+                className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 transition-colors text-stone-300 font-bold text-xs border-r border-white/5"
+              >
+                <Heart className="w-4 h-4 text-pink-500" /> Like
+              </button>
+              <div className="px-4 py-2 bg-stone-900 text-stone-500 font-mono text-xs flex items-center">{repo.likes}</div>
+            </div>
+            <button className="p-2 border border-white/5 rounded-xl text-stone-300 hover:bg-white/5"><GitFork className="w-5 h-5" /></button>
+            <button 
+              onClick={() => triggerAudit(selectedFile || undefined)}
+              className="px-6 py-2 bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/10 transition-colors flex items-center gap-2"
+            >
+              <Cpu className="w-4 h-4" />
+              {selectedFile ? `Audit ${selectedFile.name}` : "Audit Engine"}
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 px-4 lg:px-8 pt-safe pb-4 lg:py-6 flex items-center justify-between bg-kannada-cream/80 backdrop-blur-xl border-b border-stone-100">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-kannada-red rounded-2xl flex items-center justify-center text-white font-serif font-black text-2xl shadow-lg shadow-kannada-red/20">
-            ಕ
-          </div>
-          <div className="hidden sm:block">
-            <span className="font-serif text-2xl font-black tracking-tight block leading-none">Kala</span>
-            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-stone-400">Kannada</span>
-          </div>
-        </div>
-        
-        <nav className="hidden lg:flex items-center gap-10">
-          {[
-            { id: 'map', label: 'Path', icon: LayoutGrid },
-            { id: 'chat', label: 'Dialogue', icon: Sparkles },
-            { id: 'stories', label: 'Folklore', icon: BookOpen },
-            { id: 'friends', label: 'Social', icon: User },
-            { id: 'culture', label: 'Culture', icon: Library },
-          ].map(item => (
-            <button 
-              key={item.id}
-              onClick={() => setView(item.id as any)}
-              className={`flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] transition-all relative ${
-                view === item.id || (view === 'lesson' && item.id === 'map') || (view === 'story-player' && item.id === 'stories')
-                  ? 'text-kannada-ink' 
-                  : 'text-stone-300 hover:text-stone-500'
-              }`}
-            >
-              <item.icon className={`w-4 h-4 ${view === item.id ? 'text-kannada-gold' : ''}`} />
-              {item.label}
-              {(view === item.id || (view === 'lesson' && item.id === 'map') || (view === 'story-player' && item.id === 'stories')) && (
-                <motion.div layoutId="nav" className="absolute -bottom-6 left-0 right-0 h-1 bg-kannada-gold rounded-full" />
-              )}
-            </button>
-          ))}
-        </nav>
-
-        <div className="flex items-center gap-2 lg:gap-4">
-          <div className="hidden sm:flex items-center gap-2">
-            <StatBadge icon={Flame} value={userStats.streak} color="text-orange-500" />
-            <StatBadge icon={Sparkles} value={userStats.xp} color="text-kannada-gold" />
-          </div>
-          <StatBadge icon={Heart} value={userStats.hearts} color="text-kannada-red" />
-          
-          <button 
-            onClick={handleShare}
-            className="w-10 h-10 lg:w-12 lg:h-12 rounded-2xl bg-white flex items-center justify-center hover:bg-stone-50 transition-colors border border-stone-200"
-            title="Share App"
-          >
-            <Share2 className="w-5 h-5 text-stone-500" />
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="pt-28 pb-32 lg:pb-10 min-h-screen">
-        <AnimatePresence mode="wait">
-          {view === 'map' ? (
-            <motion.div
-              key="map"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="max-w-6xl mx-auto"
-            >
-              <div className="text-center mb-16 px-6">
-                <h2 className="text-6xl font-serif font-black mb-4 text-kannada-ink tracking-tight">Kala Academy</h2>
-                <p className="text-stone-400 text-lg max-w-lg mx-auto font-medium">Master the prestigious language of Karnataka through our curated immersion curriculum.</p>
-              </div>
-              <MandalaMap progress={progress} onSelectLevel={handleSelectLevel} />
-              
-              {/* Mastery Path Anchor */}
-              <div className="max-w-md mx-auto mt-20 p-12 border-2 border-dashed border-kannada-gold/30 rounded-[4rem] text-center bg-gradient-to-t from-white/50 to-transparent">
-                <div className="w-16 h-16 bg-kannada-gold rounded-[1.5rem] flex items-center justify-center mx-auto mb-6 shadow-xl shadow-kannada-gold/20">
-                  <Zap className="w-8 h-8 text-white" />
+      {activeTab === 'code' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-9 space-y-4">
+            {selectedFile ? (
+              <CodeViewer file={selectedFile} onBack={() => setSelectedFile(null)} />
+            ) : (
+              <div className="bg-white/[0.01] border border-white/5 rounded-3xl overflow-hidden glass-card">
+                <div className="bg-white/5 px-6 py-4 border-b border-white/5 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="relative group">
+                      <button className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/5 rounded-lg text-xs font-bold text-white hover:bg-white/10 transition-all font-mono">
+                        <GitFork className="w-3 h-3 text-stone-500" /> {currentBranch} <ChevronDown className="w-3 h-3 text-stone-500" />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-stone-500">
+                      <span className="font-mono">forge-labs</span> / <span className="text-white font-bold">{repo.name}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => triggerAudit()} className="p-2 hover:bg-white/5 rounded-lg text-emerald-400" title="Audit Source">
+                      <Cpu className="w-4 h-4" />
+                    </button>
+                    <span className="text-[10px] font-mono text-stone-600 tracking-widest uppercase">Go to file</span>
+                  </div>
                 </div>
-                <h3 className="text-3xl font-serif font-black mb-3">Mastery Lab</h3>
-                <p className="text-stone-400 text-sm font-medium mb-8 leading-relaxed">Experience a never-ending journey with dynamic sessions designed for advanced proficiency.</p>
-                <button 
-                  onClick={startInfinitePractice}
-                  disabled={isAiLoading}
-                  className="w-full py-5 bg-kannada-ink text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:scale-105 active:scale-95 transition-all shadow-lg"
-                >
-                  {isAiLoading ? "Synchronizing..." : "Initialize Session"}
-                </button>
+                
+                <div className="bg-white/5 px-6 py-4 border-b border-white/5 flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-sm font-medium">
+                    <div className="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
+                      <Lock className="w-4 h-4 text-indigo-400" />
+                    </div>
+                    <span className="text-white">latest_release_v0.5.1</span>
+                    <span className="text-stone-500 text-xs font-mono">merged 2 hours ago by @alix</span>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <span className="text-[10px] font-mono text-stone-500 uppercase tracking-widest bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded">Verified Build</span>
+                    <span className="text-[10px] font-mono text-stone-600">452 Commits</span>
+                  </div>
+                </div>
+                <FileBrowser nodes={MOCK_FILES} onSelectFile={setSelectedFile} />
               </div>
-            </motion.div>
-          ) : view === 'lesson' ? (
-            <motion.div
-              key="lesson"
-              initial={{ opacity: 0, x: 50 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -50 }}
-              className="h-[calc(100vh-8rem)]"
-            >
-              {selectedLevel && (
-                <LessonView 
-                  lessonId={selectedLevel} 
-                  onComplete={handleLessonComplete}
-                  onBack={() => setView('map')}
-                  onAddXp={addXp}
-                />
-              )}
-            </motion.div>
-          ) : view === 'stories' ? (
-            <motion.div
-              key="stories"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-            >
-              <div className="text-center mb-16 px-6">
-                <h2 className="text-6xl font-serif font-black mb-4 text-kannada-ink">Katha Sangama</h2>
-                <p className="text-stone-400 text-lg max-w-lg mx-auto font-medium">Immerse yourself in interactive tales and shape your own narrative.</p>
-              </div>
-              <StoryList 
-                onSelectStory={(id) => { setSelectedStory(id); setAiStory(null); setView('story-player'); }} 
-                onAiStory={handleAiStory}
-              />
-            </motion.div>
-          ) : view === 'story-player' ? (
-            <motion.div
-              key="story-player"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              className="h-[calc(100vh-8rem)]"
-            >
-              <StoryPlayer 
-                storyId={selectedStory || undefined} 
-                content={aiStory}
-                onComplete={() => setView('stories')}
-                onBack={() => setView('stories')}
-                isLoading={isStoryLoading}
-              />
-            </motion.div>
-          ) : view === 'culture' ? (
-            <motion.div
-              key="culture"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-            >
-              <div className="text-center mb-16 px-6">
-                <h2 className="text-6xl font-serif font-black mb-4 text-kannada-ink">Kavi & Kale</h2>
-                <p className="text-stone-400 text-lg max-w-lg mx-auto font-medium">Explore the rich heritage, literature, and arts of Karnataka.</p>
-              </div>
-              <CultureView />
-            </motion.div>
-          ) : view === 'chat' ? (
-            <motion.div
-              key="chat"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="px-6"
-            >
-              <ChatView 
-                history={chatHistory} 
-                onSendMessage={handleSendMessage} 
-                isLoading={isChatLoading} 
-                onClear={clearChat}
-                mode={chatMode}
-                onModeChange={(m) => { setChatMode(m); clearChat(); }}
-              />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="friends"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-            >
-              <FriendsView userStats={userStats} />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </main>
+            )}
 
-      {/* Insight Portal Modal */}
+            <div className="bg-white/[0.01] border border-white/5 rounded-3xl p-8 prose prose-invert max-w-none">
+              <div className="flex items-center gap-2 mb-6 text-stone-500 font-mono tracking-widest text-[10px]">
+                <FileText className="w-4 h-4" /> README.md
+              </div>
+              <h1 className="text-4xl font-serif font-black italic mb-6">Nebula Physics Engine</h1>
+              <p className="text-stone-400 leading-relaxed text-lg mb-8">
+                A highly optimized spatial synchronization engine built for low-latency web environments. Nebula leverages WebAssembly and SIMD instructions to deliver desktop-grade physics performance in standard browsers.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 not-prose">
+                 <div className="p-6 bg-white/5 rounded-2xl border border-white/5 border-l-4 border-l-emerald-500">
+                    <h4 className="text-white font-bold mb-2">High Parallelism</h4>
+                    <p className="text-xs text-stone-500">Optimized for multi-threaded WASM workers.</p>
+                 </div>
+                 <div className="p-6 bg-white/5 rounded-2xl border border-white/5 border-l-4 border-l-indigo-500">
+                    <h4 className="text-white font-bold mb-2">Spatial Hashing</h4>
+                    <p className="text-xs text-stone-500">Efficient broad-phase collision detection.</p>
+                 </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="lg:col-span-3 space-y-6">
+            <section className="space-y-4">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-stone-500 font-mono">About</h4>
+              <p className="text-sm text-stone-400 font-medium leading-relaxed">{repo.description}</p>
+              <div className="flex items-center gap-2 text-emerald-400 text-sm font-medium">
+                <Globe className="w-4 h-4" /> nebula-engine.io
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {['physics', 'wasm', 'graphics', 'spatial'].map(tag => (
+                  <span key={tag} className="text-[10px] font-mono font-medium px-2 py-1 bg-white/5 border border-white/5 rounded hover:bg-white/10 cursor-pointer transition-colors">#{tag}</span>
+                ))}
+              </div>
+            </section>
+
+            <section className="space-y-4 pt-6 border-t border-white/5">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-stone-500 font-mono">Stats</h4>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-stone-500 flex items-center gap-2"><Eye className="w-3.5 h-3.5" /> Watching</span>
+                  <span className="text-white font-mono">452</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-stone-500 flex items-center gap-2"><GitFork className="w-3.5 h-3.5" /> Forks</span>
+                  <span className="text-white font-mono">{repo.forks}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-stone-500 flex items-center gap-2"><Star className="w-3.5 h-3.5" /> Stars</span>
+                  <span className="text-white font-mono">{(repo.stars/1000).toFixed(1)}k</span>
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-4 pt-6 border-t border-white/5">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-stone-500 font-mono">Languages</h4>
+              <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden flex">
+                 <div className="h-full bg-orange-500 w-[72%]" />
+                 <div className="h-full bg-indigo-500 w-[20%]" />
+                 <div className="h-full bg-emerald-500 w-[8%]" />
+              </div>
+              <div className="space-y-2">
+                 <div className="flex items-center justify-between text-[11px] font-mono">
+                    <span className="flex items-center gap-2 text-stone-400">
+                      <div className="w-2 h-2 rounded-full bg-orange-500" /> Rust
+                    </span>
+                    <span className="text-stone-600">72.4%</span>
+                 </div>
+                 <div className="flex items-center justify-between text-[11px] font-mono">
+                    <span className="flex items-center gap-2 text-stone-400">
+                      <div className="w-2 h-2 rounded-full bg-indigo-500" /> C++
+                    </span>
+                    <span className="text-stone-600">20.1%</span>
+                 </div>
+                 <div className="flex items-center justify-between text-[11px] font-mono">
+                    <span className="flex items-center gap-2 text-stone-400">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500" /> Assembly
+                    </span>
+                    <span className="text-stone-600">7.5%</span>
+                 </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'issues' && (
+        <div className="bg-white/[0.01] border border-white/5 rounded-3xl overflow-hidden glass-card">
+          <div className="bg-white/5 px-6 py-4 flex items-center justify-between border-b border-white/5">
+            <div className="flex items-center gap-4">
+              <button className="flex items-center gap-2 text-sm font-bold text-white uppercase tracking-widest font-mono">
+                <Info className="w-5 h-5 text-emerald-400" /> {issues.filter(i => i.status === 'open').length} Open Operations
+              </button>
+              <button className="flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-white uppercase tracking-widest font-mono">
+                <CheckCircle2 className="w-5 h-5" /> {issues.filter(i => i.status === 'closed').length} Closed
+              </button>
+            </div>
+            <button 
+              onClick={addIssue}
+              className="px-4 py-2 bg-emerald-500 text-stone-950 rounded-xl text-xs font-bold font-mono uppercase tracking-widest"
+            >
+              Construct Issue
+            </button>
+          </div>
+          <div className="divide-y divide-white/5">
+            {issues.map(issue => (
+              <div key={issue.id} className="p-6 hover:bg-white/5 transition-colors group cursor-pointer">
+                <div className="flex items-start gap-4">
+                  <div className={`mt-1 ${issue.status === 'open' ? 'text-emerald-400' : 'text-purple-400'}`}>
+                    {issue.status === 'open' ? <Info className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-lg font-bold text-white group-hover:text-emerald-400 transition-colors uppercase italic tracking-tight">{issue.title}</h4>
+                    <div className="flex items-center gap-3 mt-1.5 font-mono text-[10px] text-stone-500">
+                      <span className="bg-white/5 px-2 py-0.5 rounded-full border border-white/5 uppercase tracking-tighter text-indigo-400">{issue.label}</span>
+                      <span>#{issue.id} opened {issue.createdAt} by <span className="text-stone-300 hover:text-emerald-400 cursor-pointer">{issue.author}</span></span>
+                    </div>
+                  </div>
+                  {issue.comments > 0 && (
+                    <div className="flex items-center gap-1.5 text-stone-600 font-mono text-xs">
+                      <MessageSquare className="w-4 h-4" /> {issue.comments}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'pulls' && (
+        <div className="bg-white/[0.01] border border-white/5 rounded-3xl overflow-hidden glass-card">
+          <div className="bg-white/5 px-6 py-4 flex items-center justify-between border-b border-white/5">
+            <div className="flex items-center gap-4">
+              <button className="flex items-center gap-2 text-sm font-bold text-white uppercase tracking-widest font-mono">
+                <GitPullRequest className="w-5 h-5 text-emerald-400" /> {MOCK_PULLS.filter(p => p.status === 'open').length} Active Synchronies
+              </button>
+            </div>
+            <button className="px-4 py-2 bg-emerald-500 text-stone-950 rounded-xl text-xs font-bold font-mono uppercase tracking-widest">New Merge Request</button>
+          </div>
+          <div className="divide-y divide-white/5">
+            {MOCK_PULLS.map(pr => (
+              <div key={pr.id} className="p-6 hover:bg-white/5 transition-colors group cursor-pointer">
+                <div className="flex items-start gap-4">
+                  <div className={`mt-1 ${pr.status === 'open' ? 'text-emerald-400' : pr.status === 'merged' ? 'text-purple-400' : 'text-stone-500'}`}>
+                    <GitPullRequest className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-lg font-bold text-white group-hover:text-emerald-400 transition-colors uppercase italic tracking-tight">{pr.title}</h4>
+                    <div className="flex items-center gap-3 mt-1.5 font-mono text-[10px] text-stone-500">
+                      <span className="bg-white/5 px-2 py-0.5 rounded-full border border-white/5 text-stone-300">{pr.branch}</span>
+                      <span>#{pr.id} by <span className="text-stone-300 font-bold">{pr.author}</span> {pr.status === 'merged' ? 'synchronized' : 'requested'} {pr.createdAt}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'actions' && (
+         <div className="bg-white/[0.01] border border-white/5 rounded-3xl overflow-hidden glass-card">
+            <div className="bg-white/5 px-6 py-4 flex items-center justify-between border-b border-white/5">
+              <h3 className="text-sm font-black uppercase tracking-widest text-white font-mono flex items-center gap-3">
+                <Play className="w-4 h-4 text-emerald-400" /> Automation Flow
+              </h3>
+            </div>
+            <div className="divide-y divide-white/5">
+              {MOCK_WORKFLOWS.map(run => (
+                <div key={run.id} className="p-6 flex items-center justify-between hover:bg-white/5 transition-colors group">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-2 h-2 rounded-full ${run.status === 'success' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500'} animate-pulse`} />
+                    <div>
+                      <h4 className="font-bold text-white group-hover:text-emerald-400 transition-colors">{run.name}</h4>
+                      <p className="text-[10px] font-mono text-stone-500 uppercase tracking-tighter mt-1">{run.event} on {run.branch} • #{Math.floor(Math.random()*100)}</p>
+                    </div>
+                  </div>
+                  <div className="text-[10px] font-mono text-stone-600 uppercase tracking-widest">{run.createdAt}</div>
+                </div>
+              ))}
+            </div>
+         </div>
+      )}
+
+      {activeTab === 'insights' && (
+        <div className="space-y-6">
+          <div className="bg-white/[0.01] border border-white/5 rounded-3xl p-8 glass-card">
+            <h3 className="text-xl font-serif font-black italic text-white mb-8">Node Discussion</h3>
+            <div className="space-y-8 mb-8">
+              {repo.commentList && repo.commentList.map((comment, i) => (
+                <div key={i} className="flex gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center font-bold text-xs uppercase">
+                    {comment.user[0]}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-bold text-white">{comment.user}</span>
+                      <span className="text-[10px] font-mono text-stone-600 uppercase tracking-widest">{comment.time}</span>
+                    </div>
+                    <p className="text-sm text-stone-400 leading-relaxed font-medium">{comment.text}</p>
+                  </div>
+                </div>
+              ))}
+              {(!repo.commentList || repo.commentList.length === 0) && (
+                <div className="py-12 text-center text-stone-600 font-mono text-[10px] uppercase tracking-widest">
+                  No transmissions discovered for this node.
+                </div>
+              )}
+            </div>
+            <div className="pt-8 border-t border-white/5 flex gap-4">
+              <input 
+                type="text" 
+                placeholder="Broadcast a message..." 
+                className="flex-1 bg-stone-950 border border-white/10 rounded-xl py-3 px-6 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500/50 font-medium"
+              />
+              <button className="px-6 py-2 bg-emerald-500 text-stone-950 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-emerald-400 transition-colors">
+                Broadcast
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'settings' && (
+        <div className="max-w-3xl mx-auto space-y-12 py-12">
+          <section>
+            <h3 className="text-2xl font-serif font-black italic text-white mb-2">Core Configuration</h3>
+            <p className="text-stone-500 text-sm mb-8 font-medium">Manage visibility, access controls and neural link settings for this node.</p>
+            
+            <div className="space-y-6">
+              <div className="p-8 bg-white/[0.02] border border-white/5 rounded-3xl">
+                <label className="block text-[10px] font-black uppercase tracking-widest text-stone-500 mb-2 font-mono">Node Label</label>
+                <input 
+                  type="text" 
+                  defaultValue={repo.name}
+                  className="w-full bg-stone-950 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500/50 font-mono"
+                />
+              </div>
+
+              <div className="border border-red-500/20 bg-red-500/5 rounded-3xl p-8">
+                <h4 className="text-red-400 font-bold mb-2">Danger Manifest</h4>
+                <p className="text-xs text-stone-500 mb-6 font-medium">Operations that can cause irreversible data purging in the spatial mesh.</p>
+                <div className="flex flex-col gap-4">
+                  <button className="flex items-center justify-between p-4 bg-stone-950/50 border border-white/5 rounded-2xl hover:bg-stone-950 transition-colors group">
+                    <div className="text-left">
+                      <p className="text-xs font-bold text-white">Decommission Node</p>
+                      <p className="text-[10px] text-stone-600 font-mono">Archive all repository state and logs.</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-stone-600 group-hover:text-white" />
+                  </button>
+                  <button className="flex items-center justify-between p-4 bg-red-500/10 border border-red-500/20 rounded-2xl hover:bg-red-500/20 transition-colors group">
+                    <div className="text-left">
+                      <p className="text-xs font-bold text-red-400">Purge Repository</p>
+                      <p className="text-[10px] text-red-900 font-mono">Permanently erase this node from the Forge network.</p>
+                    </div>
+                    <Trash2 className="w-4 h-4 text-red-500" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const LayoutSidebar = ({ activeTab, onSelect }: { activeTab: string, onSelect: (t: string) => void }) => (
+  <aside className="w-64 border-r border-white/5 hidden lg:flex flex-col fixed top-16 bottom-0 py-8 px-4 bg-stone-950/20 backdrop-blur-md">
+    <div className="space-y-8">
+      <nav className="space-y-1">
+        {[
+          { id: 'dashboard', icon: Layout, label: 'Workbench' },
+          { id: 'repos', icon: Database, label: 'Data Nodes' },
+          { id: 'issues', icon: ListTodo, label: 'Operations' },
+          { id: 'market', icon: Users, label: 'Community Hub' },
+          { id: 'profile', icon: User, label: 'Neural Profile' }
+        ].map(item => (
+          <button
+            key={item.id}
+            onClick={() => onSelect(item.id)}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-mono uppercase tracking-[0.2em] text-[10px] font-black ${
+              activeTab === item.id 
+                ? 'bg-emerald-500/10 text-white shadow-lg shadow-emerald-500/5' 
+                : 'text-stone-500 hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            <item.icon className={`w-4 h-4 ${activeTab === item.id ? 'text-emerald-400' : ''}`} />
+            {item.label}
+          </button>
+        ))}
+      </nav>
+
+      <div>
+        <h4 className="px-4 text-[9px] font-black uppercase tracking-widest text-stone-600 mb-4 flex items-center justify-between">
+          Recent Nodes
+          <ArrowUpRight className="w-3 h-3" />
+        </h4>
+        <div className="space-y-1">
+           {MOCK_REPOS.slice(0, 2).map(repo => (
+             <button key={repo.id} className="w-full flex items-center gap-3 px-4 py-2 text-stone-500 hover:text-white transition-colors group">
+               <div className="w-1.5 h-1.5 rounded-full bg-white/10 group-hover:bg-emerald-400" />
+               <span className="text-[11px] font-mono truncate">{repo.name}</span>
+             </button>
+           ))}
+        </div>
+      </div>
+    </div>
+
+    <div className="mt-auto space-y-4">
+      <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
+         <div className="flex items-center gap-3 mb-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="text-[11px] font-mono text-white">Build Success</span>
+         </div>
+         <p className="text-[10px] font-mono text-stone-500">nebula-core synced 0.2s ago</p>
+      </div>
+      <button className="w-full flex items-center gap-3 px-4 py-3 text-stone-500 hover:text-white transition-colors font-mono uppercase tracking-[0.15em] text-[11px] font-black">
+        <Settings className="w-4 h-4" /> Configuration
+      </button>
+    </div>
+  </aside>
+);
+
+const UserDetail = ({ user, repos, onSelectRepo, onFollow, onLike, onBack }: { 
+  user: UserProfile, 
+  repos: Repository[], 
+  onSelectRepo: (r: Repository) => void,
+  onFollow: (id: string) => void,
+  onLike: (id: string) => void,
+  onBack: () => void
+}) => {
+  const userRepos = repos.filter(r => r.owner === user.username);
+  
+  return (
+    <div className="space-y-12 animate-in slide-in-from-bottom-4 duration-500">
+      <div className="flex items-center gap-4 mb-8">
+        <button onClick={onBack} className="p-2 bg-white/5 rounded-xl text-stone-400 hover:text-white transition-colors border border-white/5">
+          <ChevronRight className="w-5 h-5 rotate-180" />
+        </button>
+        <span className="text-[10px] font-mono text-stone-500 uppercase tracking-[0.2em] font-black">Neural Profile</span>
+      </div>
+      <div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
+        <img src={user.avatar} className="w-32 h-32 rounded-3xl border-4 border-white/5 shadow-2xl" alt="" />
+        <div className="flex-1 text-center md:text-left">
+          <h2 className="text-4xl font-serif font-black italic text-white uppercase tracking-tight mb-2">{user.username}</h2>
+          <p className="text-stone-400 max-w-xl mb-6 font-medium leading-relaxed">{user.bio}</p>
+          <div className="flex flex-wrap justify-center md:justify-start gap-4">
+            <div className="bg-white/5 px-6 py-2 rounded-2xl border border-white/5">
+              <span className="block text-xl font-bold text-white leading-none">{user.followers}</span>
+              <span className="text-[10px] font-mono text-stone-500 uppercase tracking-widest">Followers</span>
+            </div>
+            <div className="bg-white/5 px-6 py-2 rounded-2xl border border-white/5">
+              <span className="block text-xl font-bold text-white leading-none">{user.following}</span>
+              <span className="text-[10px] font-mono text-stone-500 uppercase tracking-widest">Following</span>
+            </div>
+            <button 
+              onClick={() => onFollow(user.id)}
+              className={`px-8 py-2 rounded-2xl font-bold text-sm transition-all ${user.isFriend ? 'bg-white/10 text-stone-300' : 'bg-emerald-500 text-stone-950 hover:bg-emerald-400'}`}
+            >
+              {user.isFriend ? 'Following' : 'Follow Node'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <section>
+        <h3 className="text-sm font-black uppercase tracking-[0.2em] text-stone-500 mb-8 font-mono flex items-center gap-3">
+          <Database className="w-4 h-4" /> Spatial Repositories
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {userRepos.length > 0 ? (
+            userRepos.map(repo => (
+              <RepoCard key={repo.id} repo={repo} onClick={() => onSelectRepo(repo)} onLike={() => onLike(repo.id)} />
+            ))
+          ) : (
+             <div className="col-span-full py-12 text-center bg-white/[0.01] border border-dashed border-white/10 rounded-3xl">
+                <p className="text-stone-600 font-mono text-xs uppercase tracking-widest font-black">No public nodes discovered in this spatial sector</p>
+             </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+};
+
+// --- Main Application ---
+
+export default function ForgeApp() {
+  const [view, setView] = useState<'dashboard' | 'repo-detail' | 'social' | 'user-detail' | 'profile'>('dashboard');
+  const [activeSidebarTab, setActiveSidebarTab] = useState('dashboard');
+  const [selectedRepo, setSelectedRepo] = useState<Repository | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isCreatingRepo, setIsCreatingRepo] = useState(false);
+  const [newRepoName, setNewRepoName] = useState('');
+  const [newRepoDesc, setNewRepoDesc] = useState('');
+  
+  const [currentUser, setCurrentUser] = useState<UserProfile>({
+    id: 'me',
+    username: 'shaikhmadiha',
+    avatar: 'https://i.pravatar.cc/150?u=shaikhmadiha',
+    bio: 'Lead Spatial Architect. Building the next generation of Forge nodes.',
+    followers: 128,
+    following: 64,
+    isFriend: true
+  });
+
+  const [repos, setRepos] = useState<Repository[]>(MOCK_REPOS);
+  const [users, setUsers] = useState<UserProfile[]>(MOCK_USERS);
+  const [notifications, setNotifications] = useState<ForgeNotification[]>(MOCK_NOTIFICATIONS);
+
+  const toggleFollow = (userId: string) => {
+    if (userId === 'me') return;
+    setUsers(users.map(u => u.id === userId ? { ...u, isFriend: !u.isFriend, followers: u.followers + (u.isFriend ? -1 : 1) } : u));
+    const user = users.find(u => u.id === userId);
+    if (user && !user.isFriend) {
+       setNotifications([{ id: Date.now().toString(), type: 'follow', user: user.username, target: 'your node', time: 'Just now', read: false }, ...notifications]);
+    }
+  };
+
+  const handleLikeRepo = (repoId: string) => {
+    setRepos(repos.map(r => r.id === repoId ? { ...r, likes: r.likes + 1 } : r));
+    const repo = repos.find(r => r.id === repoId);
+    if (repo) {
+       setNotifications([{ id: Date.now().toString(), type: 'like', user: 'alix-dev', target: repo.name, time: 'Just now', read: false }, ...notifications]);
+    }
+  };
+
+  const handleSelectRepo = (repo: Repository) => {
+    setSelectedRepo(repo);
+    setView('repo-detail');
+  };
+
+  const handleGoHome = () => {
+    setView('dashboard');
+    setSelectedRepo(null);
+    setSelectedUser(null);
+  };
+
+  const constructRepository = () => {
+    if (!newRepoName || !newRepoDesc) return;
+
+    const newRepo: Repository = {
+      id: `node-${Date.now()}`,
+      name: newRepoName,
+      owner: currentUser.username,
+      description: newRepoDesc,
+      stars: 0,
+      forks: 0,
+      visibility: 'Public',
+      language: 'TypeScript',
+      languageColor: 'bg-blue-500',
+      updatedAt: 'Just now',
+      size: '0 KB',
+      likes: 0,
+      comments: 0,
+      commentList: []
+    };
+
+    setRepos([newRepo, ...repos]);
+    setNotifications([
+      { id: Date.now().toString(), type: 'push', user: 'System', target: newRepoName, time: 'Just now', read: false },
+      ...notifications
+    ]);
+    setIsCreatingRepo(false);
+    setNewRepoName('');
+    setNewRepoDesc('');
+  };
+
+  return (
+    <div className="min-h-screen bg-stone-950 text-stone-300 font-sans selection:bg-emerald-500/30 selection:text-emerald-100 antialiased">
+      <Navbar 
+        onHome={handleGoHome} 
+        onNewRepo={() => setIsCreatingRepo(true)} 
+        onProfile={() => setView('profile')}
+        notifications={notifications} 
+        currentUser={currentUser}
+      />
+
       <AnimatePresence>
-        {showInsightModal && (
+        {isCreatingRepo && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-kannada-ink/60 backdrop-blur-md"
+            className="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-[1000] flex items-center justify-center p-6"
           >
-            <motion.div 
-              initial={{ scale: 0.9, y: 40 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 40 }}
-              className="bg-white rounded-[40px] shadow-2xl w-full max-w-xl overflow-hidden"
-            >
-              <div className="p-8 border-b border-stone-100 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-kannada-gold/10 rounded-2xl flex items-center justify-center">
-                    <Library className="w-5 h-5 text-kannada-gold" />
-                  </div>
-                  <h3 className="text-xl font-black">Academy Session</h3>
+             <motion.div 
+               initial={{ scale: 0.9, opacity: 0 }}
+               animate={{ scale: 1, opacity: 1 }}
+               exit={{ scale: 0.9, opacity: 0 }}
+               className="bg-stone-900 border border-white/10 rounded-[32px] w-full max-w-xl p-8 shadow-2xl"
+             >
+                <div className="flex items-center justify-between mb-8">
+                  <h3 className="text-2xl font-serif font-black italic text-white uppercase tracking-tight">Construct New Node</h3>
+                  <button onClick={() => setIsCreatingRepo(false)} className="p-2 text-stone-500 hover:text-white transition-colors">
+                    <X className="w-6 h-6" />
+                  </button>
                 </div>
-                <button onClick={() => setShowInsightModal(false)} className="p-3 hover:bg-stone-100 rounded-2xl transition-colors">
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-
-              <div className="p-12 text-center min-h-[400px] flex flex-col items-center justify-center">
-                {isAiLoading ? (
-                  <div className="flex flex-col items-center gap-6">
-                    <div className="w-16 h-16 border-4 border-kannada-gold border-t-transparent rounded-full animate-spin" />
-                    <p className="text-stone-400 font-bold uppercase tracking-widest text-xs">Accessing Portal...</p>
+                
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-stone-500 mb-2 font-mono ml-4">Node Designation</label>
+                    <input 
+                      type="text" 
+                      value={newRepoName}
+                      onChange={(e) => setNewRepoName(e.target.value)}
+                      placeholder="e.g. nebula-protocol"
+                      className="w-full bg-stone-950 border border-white/10 rounded-2xl py-4 px-6 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500/50 font-mono text-white placeholder:text-stone-700"
+                    />
                   </div>
-                ) : masteryInsight ? (
-                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-                    <div className="flex items-center justify-center gap-6 mb-8">
-                      <h4 className="text-7xl font-kannada text-kannada-ink leading-tight">{masteryInsight.kannada}</h4>
-                      <button 
-                        onClick={() => handleAudio(masteryInsight.kannada)}
-                        disabled={isAudioLoading}
-                        className="w-16 h-16 bg-kannada-gold/10 rounded-full flex items-center justify-center text-kannada-gold hover:bg-kannada-gold/20 transition-colors disabled:opacity-50"
-                      >
-                        {isAudioLoading ? (
-                           <div className="w-6 h-6 border-2 border-kannada-gold border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <Volume2 className="w-8 h-8" />
-                        )}
-                      </button>
-                    </div>
-                    <p className="text-2xl text-kannada-gold font-black mb-4">{masteryInsight.transliteration}</p>
-                    <p className="text-stone-400 italic text-xl mb-10">"{masteryInsight.english}"</p>
-                    <div className="bg-stone-50 p-8 rounded-[32px] text-left border border-stone-100">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Library className="w-4 h-4 text-kannada-gold" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-stone-400">Linguistic Note</span>
-                      </div>
-                      <p className="text-stone-600 leading-relaxed font-medium">{masteryInsight.explanation}</p>
-                    </div>
-                  </motion.div>
-                ) : (
-                  <p className="text-red-500 font-bold">Session unavailable. Please reconnect.</p>
-                )}
-              </div>
 
-              <div className="p-8 bg-stone-50/50 flex gap-4">
-                <button 
-                  onClick={openInsightPortal}
-                  className="btn-secondary flex-1"
-                >
-                  New Session
-                </button>
-                <button 
-                  onClick={() => setShowInsightModal(false)}
-                  className="btn-primary flex-1"
-                >
-                  Confirm
-                </button>
-              </div>
-            </motion.div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-stone-500 mb-2 font-mono ml-4">Purpose Manifest</label>
+                    <textarea 
+                      value={newRepoDesc}
+                      onChange={(e) => setNewRepoDesc(e.target.value)}
+                      placeholder="Brief description of the repository logic..."
+                      rows={4}
+                      className="w-full bg-stone-950 border border-white/10 rounded-2xl py-4 px-6 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500/50 font-medium text-white placeholder:text-stone-700 resize-none"
+                    />
+                  </div>
+
+                  <button 
+                    onClick={constructRepository}
+                    disabled={!newRepoName || !newRepoDesc}
+                    className="w-full py-4 bg-emerald-500 text-stone-950 font-black uppercase tracking-widest rounded-2xl hover:bg-emerald-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed group flex items-center justify-center gap-3"
+                  >
+                    <Cpu className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                    Initialize Node Sequence
+                  </button>
+                </div>
+             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Footer / Floating Action */}
-      {view === 'map' && (
-        <div className="fixed bottom-24 lg:bottom-10 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-3rem)] lg:w-auto">
-          <button 
-            onClick={openInsightPortal}
-            className="group flex items-center justify-center gap-4 w-full lg:w-auto px-10 py-5 bg-kannada-ink text-white rounded-[2rem] shadow-2xl shadow-kannada-ink/30 hover:bg-stone-800 hover:scale-105 transition-all active:scale-95"
-          >
-            <Library className="w-6 h-6 text-kannada-gold" />
-            <span className="font-black uppercase tracking-widest text-sm">Knowledge Portal</span>
-            <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-          </button>
+      {isChatOpen && (
+        <div className="fixed bottom-6 right-6 w-96 z-[300]">
+          <ForgeChat onClose={() => setIsChatOpen(false)} />
         </div>
       )}
+      
+      <div className="flex">
+        <LayoutSidebar 
+          activeTab={activeSidebarTab} 
+          onSelect={(t) => {
+            setActiveSidebarTab(t);
+            if (t === 'dashboard') handleGoHome();
+            if (t === 'market') setView('social');
+            if (t === 'profile') setView('profile');
+          }} 
+        />
+        
+        <main className={`flex-1 transition-all duration-500 min-h-[calc(100vh-4rem)] p-6 lg:ml-64`}>
+          <div className="max-w-7xl mx-auto">
+            <AnimatePresence mode="wait">
+              {view === 'dashboard' ? (
+                <motion.div
+                  key="dashboard"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{ duration: 0.4 }}
+                >
+                  <Dashboard 
+                    repos={repos} 
+                    onSelectRepo={handleSelectRepo} 
+                    onNewRepo={() => setIsCreatingRepo(true)} 
+                    users={users}
+                    onFollow={toggleFollow}
+                    onLike={handleLikeRepo}
+                  />
+                </motion.div>
+              ) : view === 'profile' ? (
+                <motion.div
+                  key="profile"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{ duration: 0.4 }}
+                >
+                  <UserDetail 
+                    user={currentUser} 
+                    repos={repos} 
+                    onSelectRepo={handleSelectRepo} 
+                    onFollow={() => {}} 
+                    onLike={handleLikeRepo}
+                    onBack={handleGoHome}
+                  />
+                </motion.div>
+              ) : view === 'social' ? (
+                <motion.div
+                  key="social"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{ duration: 0.4 }}
+                >
+                   <div className="space-y-8">
+                     <h2 className="text-3xl font-serif font-black italic text-white mb-8">Spatial Connections</h2>
+                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                       {users.map(user => (
+                         <div key={user.id} className="bg-white/[0.02] border border-white/5 p-6 rounded-3xl hover:bg-white/[0.05] transition-all group">
+                           <div 
+                             onClick={() => { setSelectedUser(user); setView('user-detail'); }}
+                             className="flex lg:flex-row flex-col items-center gap-4 mb-6 cursor-pointer"
+                           >
+                             <img src={user.avatar} className="w-16 h-16 rounded-2xl border-2 border-white/10" alt="" />
+                             <div className="text-center lg:text-left">
+                               <h3 className="text-lg font-bold text-white group-hover:text-emerald-400 transition-colors uppercase italic">{user.username}</h3>
+                               <p className="text-[10px] font-mono text-stone-500 uppercase tracking-widest">{user.followers} Follows</p>
+                             </div>
+                           </div>
+                           <p className="text-xs text-stone-400 font-medium leading-relaxed mb-6 text-center lg:text-left">{user.bio}</p>
+                           <div className="flex gap-2">
+                             <button 
+                               onClick={() => toggleFollow(user.id)}
+                               className={`flex-1 py-2 ${user.isFriend ? 'bg-white/10 text-stone-300' : 'bg-emerald-500 text-stone-950'} font-bold text-xs rounded-xl hover:bg-emerald-400 transition-colors`}
+                             >
+                               {user.isFriend ? 'Following' : 'Follow Node'}
+                             </button>
+                             <button className="px-3 py-2 bg-white/5 border border-white/5 rounded-xl text-stone-400 hover:text-white transition-colors">
+                               <MoreHorizontal className="w-4 h-4" />
+                             </button>
+                           </div>
+                         </div>
+                       ))}
+                     </div>
+                   </div>
+                </motion.div>
+              ) : view === 'user-detail' && selectedUser ? (
+                <motion.div
+                  key="user-detail"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{ duration: 0.4 }}
+                >
+                  <UserDetail 
+                    user={selectedUser} 
+                    repos={repos} 
+                    onSelectRepo={handleSelectRepo} 
+                    onFollow={toggleFollow}
+                    onLike={handleLikeRepo}
+                    onBack={handleGoHome}
+                  />
+                </motion.div>
+              ) : selectedRepo && (
+                <motion.div
+                  key="repo-detail"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{ duration: 0.4 }}
+                >
+                  <RepositoryDetail repo={selectedRepo} onLike={handleLikeRepo} onBack={handleGoHome} />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </main>
+      </div>
+
+      {/* Global Command Menu Background Blur */}
+      <div className="fixed inset-0 pointer-events-none bg-radial-gradient from-emerald-500/5 to-transparent z-[-1]" />
     </div>
   );
 }

@@ -1,25 +1,25 @@
 {
-  "short_name": "KalaAcademy",
-  "name": "Kala Academy: Language Immersion",
+  "short_name": "Forge",
+  "name": "Forge: Spatial Repository Workspace",
   "icons": [
     {
-      "src": "https://api.dicebear.com/7.x/initials/png?seed=K&backgroundColor=8B0000&fontFamily=serif&fontSize=60&width=192&height=192",
+      "src": "https://api.dicebear.com/7.x/initials/png?seed=F&backgroundColor=10b981&fontFamily=serif&fontSize=60&width=192&height=192",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "any"
     },
     {
-      "src": "https://api.dicebear.com/7.x/initials/png?seed=K&backgroundColor=8B0000&fontFamily=serif&fontSize=60&width=512&height=512",
+      "src": "https://api.dicebear.com/7.x/initials/png?seed=F&backgroundColor=10b981&fontFamily=serif&fontSize=60&width=512&height=512",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "maskable"
     }
   ],
   "start_url": ".",
-  "background_color": "#FFFDF5",
+  "background_color": "#0c0a09",
   "display": "standalone",
   "scope": "/",
   "orientation": "portrait",
-  "theme_color": "#8B0000",
-  "description": "Immersive Kannada language learning experience."
+  "theme_color": "#10b981",
+  "description": "Professional spatial repository management and neural node collaboration platform."
 }
