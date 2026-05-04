@@ -99,6 +99,31 @@ import { INITIAL_PROGRESS, LESSONS, STORIES, STORY_CONTENT, CULTURE } from './da
 
 // --- Components ---
 
+const LoadingOverlay = ({ message }: { message: string }) => (
+  <motion.div 
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    className="fixed inset-0 z-[100] bg-white/90 backdrop-blur-md flex flex-col items-center justify-center gap-6"
+  >
+    <div className="relative">
+      <div className="w-24 h-24 border-2 border-stone-100 rounded-full" />
+      <motion.div 
+        animate={{ rotate: 360 }}
+        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+        className="absolute inset-0 w-24 h-24 border-t-2 border-kannada-red rounded-full"
+      />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <Sparkles className="w-8 h-8 text-kannada-gold animate-pulse" />
+      </div>
+    </div>
+    <div className="text-center">
+      <h3 className="text-xl font-serif font-black text-kannada-ink tracking-widest uppercase mb-2">Refining Academy</h3>
+      <p className="text-stone-400 font-medium animate-pulse">{message}</p>
+    </div>
+  </motion.div>
+);
+
 const CultureView = () => {
   const [items, setItems] = useState<CultureItem[]>(CULTURE);
   const [isLoading, setIsLoading] = useState(false);
@@ -114,20 +139,37 @@ const CultureView = () => {
   };
 
   const loadMore = async () => {
+    if (isLoading) return;
     setIsLoading(true);
     try {
       const fact = await generateCultureFact();
-      if (!fact) return;
+      if (!fact || !fact.title) {
+        throw new Error("Invalid fact data");
+      }
       const newItem: CultureItem = {
         id: `ai-${Date.now()}`,
-        title: fact.title || "Cultural Insight",
-        description: fact.description || "A deep dives into the traditions of Karnataka.",
+        title: fact.title,
+        description: fact.description,
         image: `https://images.unsplash.com/photo-1516281730419-ce014607f68b?w=800&q=80&${fact.imageTerm || 'karnataka'}`,
-        kannada_fact: fact.kanTitle || fact.title || "ಕರ್ನಾಟಕ ಸಂಸ್ಕೃತಿ"
+        kannada_fact: fact.kanTitle || fact.title
       };
       setItems(prev => [newItem, ...prev]);
     } catch (e) {
-      console.error(e);
+      console.error("Discovery Error:", e);
+      // Fallback local discovery if AI fails to ensure "blank" never happens
+      const fallbacks = [
+        { title: "Mysuru Palace", desc: "One of the most visited monuments in India.", kan: "ಮೈಸೂರು ಅರಮನೆ" },
+        { title: "Nandi Hills", desc: "A famous hill station for breathtaking sunrises.", kan: "ನಂದಿ ಬೆಟ್ಟ" },
+        { title: "Jog Falls", desc: "Second highest plunge waterfall in India.", kan: "ಜೋಗ ಜಲಪಾತ" }
+      ];
+      const random = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+      setItems(prev => [{
+        id: `fb-${Date.now()}`,
+        title: random.title,
+        description: random.desc,
+        image: `https://images.unsplash.com/photo-1582510003544-4d00b7f74220?w=800&q=80`,
+        kannada_fact: random.kan
+      }, ...prev]);
     } finally {
       setIsLoading(false);
     }
@@ -957,6 +999,7 @@ export default function App() {
   };
 
   const handleSendMessage = async (msg: string) => {
+    if (!msg.trim()) return;
     const userMsg: Message = { role: 'user', parts: [{ text: msg }] };
     const updatedHistory = [...chatHistory, userMsg];
     setChatHistory(updatedHistory);
@@ -966,7 +1009,7 @@ export default function App() {
       let systemInstruction = "You are a distinguished Kannada language mentor. Your purpose is to facilitate fluent conversation and deep cultural understanding. Communicate with professional elegance. When providing Kannada, always include the script (ಅಕ್ಷರ), the standard transliteration, and the English meaning. Maintain a supportive, human-like persona. Avoid any technical references to being an artificial intelligence.";
       
       if (chatMode === 'general') {
-        systemInstruction = "You are a highly knowledgeable and professional consultant. You provide accurate, concise, and helpful information on a wide range of topics. Your tone is academic yet accessible.";
+        systemInstruction = "You are a highly knowledgeable and professional consultant for Karnataka's heritage. You provide accurate, concise, and helpful information on a wide range of topics. Your tone is academic yet accessible.";
       }
 
       const aiResponse = await chatWithAi(msg, updatedHistory, systemInstruction); 
@@ -975,7 +1018,7 @@ export default function App() {
       setChatHistory(prev => [...prev, modelMsg]);
     } catch (error) {
       console.error("Chat Error:", error);
-      const errorMsg: Message = { role: 'model', parts: [{ text: "Connection was interrupted. Please try again." }] };
+      const errorMsg: Message = { role: 'model', parts: [{ text: "The network was interrupted. Please try re-sending your message." }] };
       setChatHistory(prev => [...prev, errorMsg]);
     } finally {
       setIsChatLoading(false);
@@ -990,20 +1033,41 @@ export default function App() {
     try {
       const storyData = await generateStory();
       if (!storyData || !storyData.scenes || storyData.scenes.length === 0) {
-        setIsStoryLoading(false);
-        return;
+        throw new Error("Malformed story data");
       }
       
       const formatted: StoryContent = {
         title: storyData.title || "New Narrative",
         scenes: storyData.scenes.map((s: any) => ({
           ...s,
-          image: `https://images.unsplash.com/photo-1544413155-257a44f77259?w=800&q=80&${s.imageSearchTerm || 'karnataka'}`
+          image: `https://images.unsplash.com/photo-1544413155-257a44f77259?w=800&q=80&sig=${Math.random()}&${s.imageSearchTerm || 'karnataka'}`
         }))
       };
       setAiStory(formatted);
     } catch (error) {
       console.error("Narration Error:", error);
+      // Robust Fallback Story
+      setAiStory({
+        title: "The Golden Bird",
+        scenes: [
+          {
+            id: 'start',
+            text: 'ಒಂದು ಕಾಡಿನಲ್ಲಿ ಒಂದು ಬಂಗಾರದ ಹಕ್ಕಿ ಇತ್ತು.',
+            transliteration: 'Ondu kaadinalli ondu bangaarada hakki ittu.',
+            translation: 'In a forest, there was a golden bird.',
+            image: 'https://images.unsplash.com/photo-1544413155-257a44f77259?w=800&q=80',
+            choices: [{ text: 'Follow the bird', next: 'end' }]
+          },
+          {
+            id: 'end',
+            text: 'ಹಕ್ಕಿ ಹಾರಿ ಹೋಯಿತು.',
+            transliteration: 'Hakki haari hoyitu.',
+            translation: 'The bird flew away.',
+            image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=800&q=80',
+            choices: []
+          }
+        ]
+      });
     } finally {
       setIsStoryLoading(false);
     }
@@ -1055,42 +1119,8 @@ export default function App() {
   return (
     <div className="min-h-screen bg-kannada-cream selection:bg-kannada-gold/30">
       <AnimatePresence>
-        {isAppLoading && (
-          <motion.div
-            key="splash"
-            initial={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[1000] bg-kannada-red flex flex-col items-center justify-center p-8"
-          >
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.5 }}
-              className="w-32 h-32 bg-white rounded-[2.5rem] flex items-center justify-center shadow-2xl mb-8"
-            >
-              <span className="text-kannada-red text-6xl font-serif font-black">K</span>
-            </motion.div>
-            <motion.h1 
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="text-white text-3xl font-serif font-black tracking-widest uppercase mb-2"
-            >
-              Kala Kannada
-            </motion.h1>
-            <motion.div 
-              initial={{ width: 0 }}
-              animate={{ width: "100px" }}
-              className="h-1 bg-white/30 rounded-full overflow-hidden"
-            >
-              <motion.div
-                animate={{ x: ["-100%", "100%"] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                className="w-1/2 h-full bg-white"
-              />
-            </motion.div>
-          </motion.div>
-        )}
+        {isAppLoading && <LoadingOverlay message="Synchronizing Academy Portals..." />}
+        {isStoryLoading && <LoadingOverlay message="Composing Folklore Narrative..." />}
       </AnimatePresence>
 
       {/* Bottom Navigation for Mobile */}
@@ -1238,6 +1268,22 @@ export default function App() {
                 onAiStory={handleAiStory}
               />
             </motion.div>
+          ) : view === 'story-player' ? (
+            <motion.div
+              key="story-player"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              className="h-[calc(100vh-8rem)]"
+            >
+              <StoryPlayer 
+                storyId={selectedStory || undefined} 
+                content={aiStory}
+                onComplete={() => setView('stories')}
+                onBack={() => setView('stories')}
+                isLoading={isStoryLoading}
+              />
+            </motion.div>
           ) : view === 'culture' ? (
             <motion.div
               key="culture"
@@ -1268,7 +1314,7 @@ export default function App() {
                 onModeChange={(m) => { setChatMode(m); clearChat(); }}
               />
             </motion.div>
-          ) : view === 'friends' ? (
+          ) : (
             <motion.div
               key="friends"
               initial={{ opacity: 0, scale: 0.95 }}
@@ -1276,24 +1322,6 @@ export default function App() {
               exit={{ opacity: 0, scale: 0.95 }}
             >
               <FriendsView userStats={userStats} />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="story-player"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              className="h-[calc(100vh-8rem)]"
-            >
-              {view === 'story-player' && (
-                <StoryPlayer 
-                  storyId={selectedStory || undefined} 
-                  content={aiStory}
-                  onComplete={() => setView('stories')}
-                  onBack={() => setView('stories')}
-                  isLoading={isStoryLoading}
-                />
-              )}
             </motion.div>
           )}
         </AnimatePresence>

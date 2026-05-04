@@ -1,10 +1,9 @@
-import { GoogleGenAI, Modality, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI, Modality, ThinkingLevel, Type } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 function parseJson(text: string) {
   try {
-    // Handle Markdown code blocks if present
     const cleanText = text.replace(/```json\n?|```/g, '').trim();
     const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
     const jsonString = jsonMatch ? jsonMatch[0] : cleanText;
@@ -19,16 +18,19 @@ export async function generatePracticeSentence(level: string) {
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Generate a simple practice sentence in Kannada for a beginner learning the topic: ${level}. 
-      Return ONLY a JSON object with this exact structure:
-      {
-        "kannada": "Kannada script",
-        "transliteration": "pronunciation",
-        "english": "English meaning",
-        "explanation": "brief grammatical tip"
-      }`,
+      contents: `Generate a simple practice sentence in Kannada for a beginner learning the topic: ${level}.`,
       config: {
-        responseMimeType: "application/json"
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            kannada: { type: Type.STRING },
+            transliteration: { type: Type.STRING },
+            english: { type: Type.STRING },
+            explanation: { type: Type.STRING }
+          },
+          required: ["kannada", "transliteration", "english", "explanation"]
+        }
       }
     });
 
@@ -143,21 +145,28 @@ export async function generateInfiniteLesson() {
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Create a unique, advanced-level Kannada practice session. 
-      Generate 5 challenging items (phrases or words) about complex real-world situations (e.g., banking, law, poetry, or deep philosophy).
-      Return ONLY a JSON object with this exact structure: 
-      { 
-        "title": "Mastery Session Name", 
-        "items": [ 
-          { 
-            "q": "Kannada script", 
-            "a": "English transliteration answer", 
-            "t": "English meaning/hint" 
-          } 
-        ] 
-      }`,
+      contents: `Create a unique, advanced-level Kannada practice session about complex real-world situations.`,
       config: {
-        responseMimeType: "application/json"
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            items: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  q: { type: Type.STRING, description: "Kannada script" },
+                  a: { type: Type.STRING, description: "English transliteration answer" },
+                  t: { type: Type.STRING, description: "English meaning/hint" }
+                },
+                required: ["q", "a", "t"]
+              }
+            }
+          },
+          required: ["title", "items"]
+        }
       }
     });
     return parseJson(response.text || "{}") || { title: "Mastery Lab", items: [] };
@@ -171,51 +180,41 @@ export async function generateStory() {
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Create an interactive 3-scene mini-story in Kannada for beginners. 
-      Theme: Daily Adventure in Karnataka. 
-      Return ONLY a JSON object with this exact structure: 
-      { 
-        "title": "Story Title",
-        "scenes": [
-          {
-            "id": "start",
-            "text": "Kannada script text",
-            "transliteration": "pronunciation",
-            "translation": "English meaning",
-            "imageSearchTerm": "architectural or nature keyword in English for image",
-            "choices": [
-              { "text": "Action option 1 in English", "next": "scene2_a" },
-              { "text": "Action option 2 in English", "next": "scene2_b" }
-            ]
-          },
-          {
-            "id": "scene2_a",
-            "text": "Kannada script text",
-            "transliteration": "pronunciation",
-            "translation": "English meaning",
-            "imageSearchTerm": "keyword",
-            "choices": [{ "text": "Continue", "next": "end" }]
-          },
-          {
-            "id": "scene2_b",
-            "text": "Kannada script text",
-            "transliteration": "pronunciation",
-            "translation": "English meaning",
-            "imageSearchTerm": "keyword",
-            "choices": [{ "text": "Continue", "next": "end" }]
-          },
-          {
-            "id": "end",
-            "text": "The adventure ends here.",
-            "transliteration": "Kathe mugiyitu",
-            "translation": "The story ended",
-            "imageSearchTerm": "sunset",
-            "choices": []
-          }
-        ]
-      }`,
+      contents: `Create an interactive 3-scene mini-story in Kannada for beginners about a daily adventure in Karnataka.`,
       config: {
-        responseMimeType: "application/json"
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            scenes: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  text: { type: Type.STRING },
+                  transliteration: { type: Type.STRING },
+                  translation: { type: Type.STRING },
+                  imageSearchTerm: { type: Type.STRING },
+                  choices: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        text: { type: Type.STRING },
+                        next: { type: Type.STRING }
+                      },
+                      required: ["text", "next"]
+                    }
+                  }
+                },
+                required: ["id", "text", "transliteration", "translation", "imageSearchTerm", "choices"]
+              }
+            }
+          },
+          required: ["title", "scenes"]
+        }
       }
     });
     const parsed = parseJson(response.text || "{}");
@@ -251,16 +250,19 @@ export async function generateCultureFact() {
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Tell me one unique and prestigious fact about Karnataka's culture, art, or history. 
-      Return ONLY a JSON object with this exact structure: 
-      { 
-        "title": "Fact Title", 
-        "description": "Short explanation in English (max 2 sentences)", 
-        "kanTitle": "Title in Kannada script", 
-        "imageTerm": "specific location or object keyword in English" 
-      }`,
+      contents: `Tell me one unique and prestigious fact about Karnataka's culture, art, or history.`,
       config: {
-        responseMimeType: "application/json"
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            description: { type: Type.STRING },
+            kanTitle: { type: Type.STRING },
+            imageTerm: { type: Type.STRING }
+          },
+          required: ["title", "description", "kanTitle", "imageTerm"]
+        }
       }
     });
     return parseJson(response.text || "{}") || {
