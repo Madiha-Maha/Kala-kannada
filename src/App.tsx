@@ -497,7 +497,9 @@ const Navbar = ({ onHome, onNewRepo, onProfile, notifications, currentUser }: {
           <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform duration-500">
             <Hash className="w-5 h-5 text-stone-950 stroke-[3px]" />
           </div>
-          <span className="font-serif font-black text-xl tracking-tight text-white uppercase italic">Forge</span>
+          <span className="font-serif font-black text-xl tracking-tight text-white uppercase italic">
+            Forge
+          </span>
         </button>
 
         <div className="relative group hidden md:block">
@@ -1231,7 +1233,10 @@ const RepositoryDetail = ({ repo, onLike, onBack }: { repo: Repository, onLike: 
   );
 };
 
-const LayoutSidebar = ({ activeTab, onSelect }: { activeTab: string, onSelect: (t: string) => void }) => (
+const LayoutSidebar = ({ activeTab, onSelect }: { 
+  activeTab: string, 
+  onSelect: (t: string) => void
+}) => (
   <aside className="w-64 border-r border-white/5 hidden lg:flex flex-col fixed top-16 bottom-0 py-8 px-4 bg-stone-950/20 backdrop-blur-md">
     <div className="space-y-8">
       <nav className="space-y-1">
@@ -1349,8 +1354,6 @@ const UserDetail = ({ user, repos, onSelectRepo, onFollow, onLike, onBack }: {
     </div>
   );
 };
-
-// --- Main Application ---
 
 export default function ForgeApp() {
   const [view, setView] = useState<'dashboard' | 'repo-detail' | 'social' | 'user-detail' | 'profile'>('dashboard');
