@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, 
@@ -44,7 +44,11 @@ import {
   X,
   Trash2,
   Users,
-  Heart
+  Heart,
+  Command,
+  Activity,
+  Layers,
+  Sparkles
 } from 'lucide-react';
 
 // --- Types ---
@@ -66,6 +70,7 @@ interface Repository {
   likes: number;
   comments: number;
   commentList?: { user: string, text: string, time: string }[];
+  coordinate?: { x: number, y: number }; // For spatial map
 }
 
 interface UserProfile {
@@ -140,6 +145,203 @@ interface WorkflowRun {
   createdAt: string;
 }
 
+// --- High-End Overlays ---
+
+const GrainOverlay = () => (
+  <div className="fixed inset-0 pointer-events-none z-[1000] opacity-[0.03]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }} />
+);
+
+// --- Command Palette Component ---
+
+const CommandPalette = ({ isOpen, onClose, onAction }: { isOpen: boolean, onClose: () => void, onAction: (a: string) => void }) => {
+  const [query, setQuery] = useState('');
+  
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        if (isOpen) onClose();
+        else onClose(); // wait, we toggle
+      }
+    };
+    document.addEventListener('keydown', down);
+    return () => document.removeEventListener('keydown', down);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-stone-950/80 backdrop-blur-xl z-[9999] flex items-center justify-center p-4 lg:p-12"
+      onClick={onClose}
+    >
+      <motion.div 
+        initial={{ scale: 0.95, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        className="w-full max-w-2xl bg-stone-900/90 border border-white/10 rounded-3xl shadow-2xl overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-4 p-6 border-b border-white/5 bg-white/5">
+          <Search className="w-6 h-6 text-emerald-400" />
+          <input 
+            autoFocus
+            className="flex-1 bg-transparent border-none outline-none text-xl font-bold text-white placeholder-stone-600 font-mono"
+            placeholder="Summon Workspace Command..."
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+          />
+          <div className="px-2 py-1 bg-stone-800 rounded-lg border border-white/5 text-[10px] font-mono text-stone-500 uppercase tracking-widest">ESC</div>
+        </div>
+        
+        <div className="p-4 max-h-[60vh] overflow-y-auto scrollbar-hide">
+          <div className="space-y-6">
+            <section>
+              <h4 className="px-4 text-[9px] font-black uppercase tracking-[0.2em] text-stone-500 mb-4 font-mono">Neural Navigation</h4>
+              <div className="space-y-1">
+                {[
+                  { icon: Layout, label: 'Standard Dashboard', action: 'dashboard' },
+                  { icon: Layers, label: 'Spatial Node Map', action: 'neural-map' },
+                  { icon: Activity, label: 'Pulse Activity Feed', action: 'social' },
+                  { icon: User, label: 'Personal Identity', action: 'profile' },
+                ].map((item, i) => (
+                  <button 
+                    key={i} 
+                    onClick={() => { onAction(item.action); onClose(); }}
+                    className="w-full flex items-center gap-4 px-4 py-3 hover:bg-emerald-500 rounded-2xl transition-all group"
+                  >
+                    <item.icon className="w-5 h-5 text-stone-400 group-hover:text-stone-950" />
+                    <span className="text-sm font-bold text-white group-hover:text-stone-950">{item.label}</span>
+                    <ChevronRight className="w-4 h-4 text-stone-700 ml-auto group-hover:text-stone-950" />
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section>
+              <h4 className="px-4 text-[9px] font-black uppercase tracking-[0.2em] text-stone-500 mb-4 font-mono">Quick Forge</h4>
+              <div className="space-y-1">
+                {[
+                  { icon: Plus, label: 'Initialize New Repository', action: 'new-repo' },
+                  { icon: Sparkles, label: 'Generate AI Logic Grid', action: 'ai' },
+                ].map((item, i) => (
+                  <button 
+                    key={i} 
+                    className="w-full flex items-center gap-4 px-4 py-3 hover:bg-white/5 rounded-2xl transition-colors group"
+                  >
+                    <item.icon className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
+                    <span className="text-sm font-bold text-white uppercase tracking-tight italic">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div className="p-4 bg-stone-950/50 border-t border-white/5 flex items-center justify-between">
+           <div className="flex gap-4">
+              <span className="text-[9px] text-stone-500 font-mono uppercase tracking-widest flex items-center gap-2">
+                <ArrowUpRight className="w-3 h-3" /> Navigate
+              </span>
+              <span className="text-[9px] text-stone-500 font-mono uppercase tracking-widest flex items-center gap-2">
+                <CheckCircle2 className="w-3 h-3" /> Select
+              </span>
+           </div>
+           <p className="text-[9px] font-mono text-emerald-500/50 tracking-widest uppercase">Forge Intelligence v2.4</p>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+// --- Spatial Map Component ---
+
+const NeuralNodeMap = ({ repos, onSelect }: { repos: Repository[], onSelect: (r: Repository) => void }) => {
+  return (
+    <div className="relative w-full h-[70vh] bg-stone-950 rounded-[48px] overflow-hidden border border-white/5 group shadow-inner">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-emerald-500/10 via-transparent to-transparent opacity-50" />
+      
+      {/* Dynamic Grid Background */}
+      <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: `linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)`, backgroundSize: '40px 40px' }} />
+
+      <div className="absolute top-8 left-8 z-10">
+        <h3 className="text-2xl font-serif font-black italic text-white uppercase tracking-tighter mb-1">Spatial Node Visualization</h3>
+        <p className="text-[10px] font-mono text-emerald-500 uppercase tracking-[0.2em] font-black">Neural Mesh Overlay Active</p>
+      </div>
+
+      <div className="relative w-full h-full flex items-center justify-center">
+        {repos.map((repo, i) => {
+          const angle = (i / repos.length) * Math.PI * 2;
+          const radius = 220;
+          const x = Math.cos(angle) * radius;
+          const y = Math.sin(angle) * radius;
+
+          return (
+            <motion.div
+              key={repo.id}
+              initial={{ opacity: 0, scale: 0 }}
+              animate={{ opacity: 1, scale: 1, x, y }}
+              whileHover={{ scale: 1.1 }}
+              transition={{ delay: i * 0.1, type: 'spring' }}
+              onClick={() => onSelect(repo)}
+              className="absolute cursor-pointer flex flex-col items-center group/node"
+            >
+              <div className="absolute -inset-8 bg-emerald-500/10 blur-2xl rounded-full opacity-0 group-hover/node:opacity-100 transition-opacity" />
+              <div className="w-16 h-16 bg-stone-900 border-2 border-white/10 rounded-2xl flex items-center justify-center group-hover/node:border-emerald-500 transition-all shadow-2xl relative z-10">
+                <Hash className="w-8 h-8 text-white group-hover/node:text-emerald-400 group-hover/node:rotate-12 transition-all" />
+              </div>
+              <div className="mt-4 text-center">
+                <h4 className="text-sm font-black text-white uppercase tracking-tighter">{repo.name}</h4>
+                <div className="flex items-center gap-2 mt-1 px-3 py-1 bg-white/5 rounded-full border border-white/5 scale-75">
+                  <div className={`w-1.5 h-1.5 rounded-full ${repo.languageColor}`} />
+                  <span className="text-[10px] font-mono text-stone-500">{repo.stars} SPARK</span>
+                </div>
+              </div>
+              
+              {/* Connector lines towards center (visually simulated) */}
+              <div className="absolute top-8 left-1/2 -translate-x-1/2 h-40 w-[1px] bg-gradient-to-t from-emerald-500/20 to-transparent -z-10 origin-bottom" style={{ transform: `rotate(${angle + Math.PI/2}rad)` }} />
+            </motion.div>
+          );
+        })}
+
+        {/* Central Core */}
+        <motion.div 
+          animate={{ rotate: 360 }}
+          transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+          className="w-32 h-32 bg-stone-900/50 backdrop-blur-md rounded-full border border-white/10 flex items-center justify-center relative shadow-[0_0_100px_rgba(16,185,129,0.1)]"
+        >
+          <div className="w-16 h-16 bg-emerald-500/20 rounded-full border border-emerald-500/30 flex items-center justify-center animate-pulse">
+            <Cpu className="w-8 h-8 text-emerald-400" />
+          </div>
+          {/* Orbital Rings */}
+          <div className="absolute inset-x-[-20%] inset-y-[-20%] border border-white/5 rounded-full animate-[spin_30s_linear_infinite]" />
+          <div className="absolute inset-x-[-40%] inset-y-[-40%] border border-white/5 rounded-full animate-[spin_45s_linear_infinite_reverse]" />
+        </motion.div>
+      </div>
+
+      <div className="absolute bottom-8 right-8 flex gap-4">
+        <div className="px-6 py-3 bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl flex items-center gap-4">
+          <div className="text-right">
+            <span className="block text-[9px] font-mono text-stone-500 uppercase tracking-widest leading-none">Neural Load</span>
+            <span className="text-sm font-black text-white italic">0.94 PetaFlow</span>
+          </div>
+          <div className="w-12 h-6 flex items-center gap-0.5">
+            {[4, 7, 2, 8, 5, 9].map((v, i) => (
+              <motion.div 
+                key={i}
+                animate={{ height: `${v * 10}%` }}
+                className="w-1 bg-emerald-500/30 rounded-full"
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- Mock Data ---
 
 const MOCK_PULLS: PullRequest[] = [
@@ -168,6 +370,7 @@ const MOCK_REPOS: Repository[] = [
     size: '24.5 MB',
     likes: 156,
     comments: 24,
+    coordinate: { x: -150, y: -100 },
     commentList: [
       { user: 'sarah-code', text: 'This physics optimization is insane!', time: '2h ago' },
       { user: 'mike-writes', text: 'Need better docs on the spatial hashing part.', time: '1d ago' }
@@ -187,6 +390,7 @@ const MOCK_REPOS: Repository[] = [
     size: '1.2 MB',
     likes: 89,
     comments: 12,
+    coordinate: { x: 180, y: 50 },
     commentList: [
       { user: 'alix-dev', text: 'The glassmorphic blur works so well on mobile.', time: '5h ago' }
     ]
@@ -205,6 +409,7 @@ const MOCK_REPOS: Repository[] = [
     size: '8.4 MB',
     likes: 45,
     comments: 8,
+    coordinate: { x: -50, y: 160 },
     commentList: []
   }
 ];
@@ -247,6 +452,7 @@ const MOCK_ISSUES: Issue[] = [
   { id: 450, title: 'Support for Apple Silicon hardware acceleration', status: 'open', label: 'Enhancement', author: 'sarah-code', createdAt: '4 days ago', comments: 34 },
   { id: 448, title: 'Update documentation for v0.4.2 API changes', status: 'closed', label: 'Docs', author: 'mike-writes', createdAt: '1 week ago', comments: 5 }
 ];
+
 
 // --- Sub-components ---
 
@@ -1355,12 +1561,65 @@ const UserDetail = ({ user, repos, onSelectRepo, onFollow, onLike, onBack }: {
   );
 };
 
+// --- Pulse System Component ---
+
+const PulseActivity = () => {
+  const [pulseIndex, setPulseIndex] = useState(0);
+  const activities = [
+    "NEBULA-ENGINE: 24.5MB spatial cache synchronized",
+    "QUANTUM-UI: Design primitives refined by @sarah-code",
+    "SENTINEL: Neural mesh boundary secured",
+    "FORGE: Intelligence core operational at 100%",
+    "SYSTEM: 128 new nodes discovered in sector 7G",
+  ];
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setPulseIndex(prev => (prev + 1) % activities.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [activities.length]);
+
+  return (
+    <div className="fixed bottom-0 left-0 right-0 h-12 bg-stone-950/80 backdrop-blur-2xl border-t border-white/5 z-[200] flex items-center px-8 overflow-hidden">
+      <div className="flex items-center gap-6 shrink-0 border-r border-white/5 pr-8 h-full">
+        <Activity className="w-4 h-4 text-emerald-400" />
+        <span className="text-[10px] font-mono text-emerald-500 uppercase tracking-[0.3em] font-black">Pulse State</span>
+      </div>
+      <div className="flex-1 px-12">
+        <AnimatePresence mode="wait">
+          <motion.p 
+            key={pulseIndex}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="text-[10px] font-mono text-stone-500 uppercase tracking-widest italic"
+          >
+            {activities[pulseIndex]}
+          </motion.p>
+        </AnimatePresence>
+      </div>
+      <div className="flex items-center gap-8 shrink-0 border-l border-white/5 pl-8 h-full">
+        <div className="flex items-center gap-2 text-stone-600 grayscale opacity-40">
+          <Globe className="w-3.5 h-3.5" />
+          <span className="text-[10px] font-mono">ASIA-SE-1</span>
+        </div>
+        <div className="flex items-center gap-2.5 text-emerald-400">
+          <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" />
+          <span className="text-[10px] font-mono uppercase tracking-[0.2em] font-black">Live Mesh</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function ForgeApp() {
-  const [view, setView] = useState<'dashboard' | 'repo-detail' | 'social' | 'user-detail' | 'profile'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'repo-detail' | 'social' | 'user-detail' | 'profile' | 'neural-map'>('dashboard');
   const [activeSidebarTab, setActiveSidebarTab] = useState('dashboard');
   const [selectedRepo, setSelectedRepo] = useState<Repository | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isCreatingRepo, setIsCreatingRepo] = useState(false);
   const [newRepoName, setNewRepoName] = useState('');
   const [newRepoDesc, setNewRepoDesc] = useState('');
@@ -1378,6 +1637,17 @@ export default function ForgeApp() {
   const [repos, setRepos] = useState<Repository[]>(MOCK_REPOS);
   const [users, setUsers] = useState<UserProfile[]>(MOCK_USERS);
   const [notifications, setNotifications] = useState<ForgeNotification[]>(MOCK_NOTIFICATIONS);
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setIsCommandPaletteOpen(prev => !prev);
+      }
+    };
+    document.addEventListener('keydown', down);
+    return () => document.removeEventListener('keydown', down);
+  }, []);
 
   const toggleFollow = (userId: string) => {
     if (userId === 'me') return;
@@ -1405,6 +1675,14 @@ export default function ForgeApp() {
     setView('dashboard');
     setSelectedRepo(null);
     setSelectedUser(null);
+  };
+
+  const handleAction = (action: string) => {
+    if (action === 'dashboard') handleGoHome();
+    if (action === 'social') setView('social');
+    if (action === 'profile') setView('profile');
+    if (action === 'neural-map') setView('neural-map');
+    if (action === 'new-repo') setIsCreatingRepo(true);
   };
 
   const constructRepository = () => {
@@ -1439,6 +1717,19 @@ export default function ForgeApp() {
 
   return (
     <div className="min-h-screen bg-stone-950 text-stone-300 font-sans selection:bg-emerald-500/30 selection:text-emerald-100 antialiased">
+      <GrainOverlay />
+      <PulseActivity />
+      
+      <AnimatePresence>
+        {isCommandPaletteOpen && (
+          <CommandPalette 
+            isOpen={isCommandPaletteOpen} 
+            onClose={() => setIsCommandPaletteOpen(false)} 
+            onAction={handleAction} 
+          />
+        )}
+      </AnimatePresence>
+
       <Navbar 
         onHome={handleGoHome} 
         onNewRepo={() => setIsCreatingRepo(true)} 
@@ -1525,7 +1816,17 @@ export default function ForgeApp() {
         <main className={`flex-1 transition-all duration-500 min-h-[calc(100vh-4rem)] p-6 lg:ml-64`}>
           <div className="max-w-7xl mx-auto">
             <AnimatePresence mode="wait">
-              {view === 'dashboard' ? (
+              {view === 'neural-map' ? (
+                <motion.div
+                  key="neural-map"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.05 }}
+                  transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <NeuralNodeMap repos={repos} onSelect={handleSelectRepo} />
+                </motion.div>
+              ) : view === 'dashboard' ? (
                 <motion.div
                   key="dashboard"
                   initial={{ opacity: 0, y: 10 }}
